@@ -1,0 +1,8 @@
+node_modules/
+.env
+db/tickets.db
+db/tickets.db-*
+uploads/proofs/*
+!uploads/proofs/.gitkeep
+npm-debug.log*
+.DS_Store

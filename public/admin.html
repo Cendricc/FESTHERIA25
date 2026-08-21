@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Panitia - Loket Tiket</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="wrap admin-wrap">
+    <div class="topbar"><span class="dot"></span><span>Dashboard Panitia</span></div>
+
+    <div id="loginBox" class="ticket" style="max-width:420px;">
+      <h2>Masuk Dashboard</h2>
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="loginUser">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="loginPass">
+      </div>
+      <button class="btn btn-primary" id="btnLogin">Masuk</button>
+      <div class="alert alert-error" id="loginError" style="display:none;margin-top:14px;"></div>
+    </div>
+
+    <div id="dashboard" style="display:none;">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="rekap">Rekap & Verifikasi Pembayaran</button>
+        <button class="tab-btn" data-tab="scan">Scan Tiket / Check-in</button>
+        <button class="tab-btn" data-tab="batch">Kontrol Pendaftaran</button>
+        <button class="tab-btn" data-tab="gagal">Data Gagal/Kedaluwarsa</button>
+      </div>
+
+      <div id="tab-rekap">
+        <div class="stat-grid" id="statGrid"></div>
+
+        <h2 style="font-size:16px;margin-top:0;">Pendaftar per Batch <span style="font-size:11px;font-weight:400;color:var(--text-muted);font-family:var(--font-mono);text-transform:none;">(update tiap 15 detik)</span></h2>
+        <div class="stat-grid" id="batchBreakdownGrid" style="margin-bottom:24px;"></div>
+
+        <div id="rekapErrorBanner" style="display:none;" class="alert alert-error"></div>
+
+        <div class="filter-bar" id="filterBar">
+          <button data-status="active" class="active">Semua</button>
+          <button data-status="pending">Menunggu Verifikasi</button>
+          <button data-status="paid">Lunas</button>
+        </div>
+
+        <div class="filter-bar" id="batchFilterBar">
+          <button data-batch="all" class="active">Semua Batch</button>
+          <button data-batch="1">Batch 1</button>
+          <button data-batch="2">Batch 2</button>
+          <button data-batch="3">Batch 3</button>
+          <button data-batch="4">OTS</button>
+        </div>
+
+        <div class="field" style="max-width:280px;margin-bottom:14px;">
+          <label>Urutkan Berdasarkan</label>
+          <select id="sortSelect">
+            <option value="waktu_desc">Waktu Pemesanan (Terbaru)</option>
+            <option value="waktu_asc">Waktu Pemesanan (Terlama)</option>
+            <option value="nama_asc">Nama (A-Z)</option>
+            <option value="nama_desc">Nama (Z-A)</option>
+            <option value="prodi_asc">Prodi (A-Z)</option>
+            <option value="prodi_desc">Prodi (Z-A)</option>
+            <option value="tingkat_asc">Tingkat (1-4)</option>
+            <option value="tingkat_desc">Tingkat (4-1)</option>
+          </select>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">Auto-refresh tiap 15 detik</span>
+          <button class="action-btn" id="btnExport">Export CSV</button>
+        </div>
+
+        <div class="table-scroll">
+          <table id="bookingTable">
+            <thead>
+              <tr>
+                <th>Order ID</th><th>Batch</th><th>Nama</th><th>Email</th><th>No HP</th><th>Prodi</th><th>Tingkat</th>
+                <th>Tiket</th><th>Total</th><th>Status</th><th>Bukti</th><th>Waktu ACC</th><th>Check-in</th><th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="bookingTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tab-scan" style="display:none;">
+        <div class="scan-box">
+          <h2>Scan QR Tiket Peserta</h2>
+          <p class="lead">Arahkan kamera ke kode QR pada tiket peserta untuk validasi kehadiran. Kode otomatis terblokir setelah berhasil sekali scan.</p>
+          <div id="reader" style="width:100%;max-width:400px;margin:0 auto;"></div>
+          <div id="scanResult" class="scan-result"></div>
+          <div class="field" style="margin-top:20px;text-align:left;">
+            <label>Atau masukkan kode tiket secara manual</label>
+            <input type="text" id="manualCode" placeholder="TIX-XXXXXXXXXX">
+          </div>
+          <button class="btn btn-secondary" id="btnManualCheck">Validasi Kode Manual</button>
+        </div>
+      </div>
+
+      <div id="tab-batch" style="display:none;">
+        <div class="ticket">
+          <h2>Kontrol Pendaftaran</h2>
+          <p class="lead">Atur buka/tutup pendaftaran, batch mana yang sedang aktif, dan harga tiket tiap batch. Perubahan langsung berlaku di halaman utama.</p>
+
+          <div class="perforation"></div>
+
+          <div class="row">
+            <span class="k">Status pendaftaran saat ini</span>
+            <span class="v" id="currentRegStatus">–</span>
+          </div>
+          <div class="row">
+            <span class="k">Batch aktif saat ini</span>
+            <span class="v" id="currentBatchLabel">–</span>
+          </div>
+          <div class="row">
+            <span class="k">Harga batch aktif saat ini</span>
+            <span class="v" id="currentPriceLabel">–</span>
+          </div>
+        </div>
+
+        <div class="ticket">
+          <div class="field">
+            <label>Pilih Batch Aktif</label>
+            <select id="batchSelect">
+              <option value="1">Batch 1</option>
+              <option value="2">Batch 2</option>
+              <option value="3">Batch 3</option>
+              <option value="4">OTS (On The Spot)</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary" id="btnToggleReg" style="margin-bottom:10px;">Memuat...</button>
+          <button class="btn btn-secondary" id="btnSaveBatch">Simpan Batch Aktif</button>
+        </div>
+
+        <div class="ticket">
+          <h2>Harga Tiket per Batch</h2>
+          <p class="lead">Boleh diisi harga yang sama atau berbeda-beda untuk tiap batch. Pesanan yang sudah dibuat sebelumnya TIDAK ikut berubah harganya.</p>
+
+          <div class="field">
+            <label>Harga Batch 1 (Rp)</label>
+            <input type="number" id="priceBatch1" min="0" step="1000">
+          </div>
+          <div class="field">
+            <label>Harga Batch 2 (Rp)</label>
+            <input type="number" id="priceBatch2" min="0" step="1000">
+          </div>
+          <div class="field">
+            <label>Harga Batch 3 (Rp)</label>
+            <input type="number" id="priceBatch3" min="0" step="1000">
+          </div>
+          <div class="field">
+            <label>Harga OTS / On The Spot (Rp)</label>
+            <input type="number" id="priceBatch4" min="0" step="1000">
+          </div>
+
+          <button class="btn btn-primary" id="btnSavePrices">Simpan Harga</button>
+        </div>
+
+        <div class="ticket" style="border-color:var(--red);">
+          <h2 style="color:var(--red);">⚠️ Zona Berbahaya</h2>
+          <p class="lead">Menghapus SEMUA data pemesanan, tiket, dan file bukti pembayaran secara permanen. Tindakan ini <strong>tidak bisa dibatalkan</strong>. Pengaturan batch/harga/buka-tutup tidak ikut terhapus.</p>
+
+          <div class="field">
+            <label>Ketik persis <code>HAPUS SEMUA DATA</code> untuk konfirmasi</label>
+            <input type="text" id="resetConfirmInput" placeholder="HAPUS SEMUA DATA">
+          </div>
+
+          <button class="btn btn-danger-outline" id="btnResetAll" disabled>Hapus Semua Data Pemesanan</button>
+        </div>
+      </div>
+
+      <div id="tab-gagal" style="display:none;">
+        <div class="alert alert-info">
+          Pesanan yang ditandai <strong>gagal/ditolak</strong> oleh panitia ditampilkan di sini secara terpisah -
+          <strong>tidak ikut masuk ke Rekap utama maupun Export CSV utama</strong>, supaya data kerja sehari-hari
+          tetap bersih. Data di sini tetap disimpan (tidak dihapus) untuk keperluan audit/pemeliharaan server.
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">Data gagal/ditolak (tidak masuk rekap utama)</span>
+          <button class="action-btn" id="btnExportGagal">Export CSV (Data Gagal)</button>
+        </div>
+
+        <div id="gagalErrorBanner" style="display:none;" class="alert alert-error"></div>
+
+        <div class="table-scroll">
+          <table id="failedTable">
+            <thead>
+              <tr>
+                <th>Order ID</th><th>Batch</th><th>Nama</th><th>Email</th><th>No HP</th><th>Prodi</th><th>Tingkat</th>
+                <th>Tiket</th><th>Total</th><th>Bukti</th><th>Waktu Pesan</th><th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="failedTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal lihat bukti pembayaran -->
+  <div id="proofModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h2 style="margin:0;">Bukti Pembayaran</h2>
+        <button class="action-btn" id="btnCloseModal">Tutup</button>
+      </div>
+      <div id="modalImageArea" style="text-align:center;"></div>
+    </div>
+  </div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="js/escapeHtml.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>
