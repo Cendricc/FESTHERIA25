@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pemesanan Tiket Event</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar"><span class="dot"></span><span id="brandLabel">Loket Tiket</span></div>
+
+    <div class="ticket">
+      <h1 id="eventName">Memuat event...</h1>
+      <p class="lead">Pesan tiketmu sekarang, bayar secara digital, dan tiket langsung terbit dalam bentuk kode QR yang tinggal ditunjukkan saat masuk acara.</p>
+
+      <div class="perforation"></div>
+
+      <div class="row">
+        <span class="k">Harga tiket</span>
+        <span class="v" id="eventPrice">Rp –</span>
+      </div>
+      <div class="row">
+        <span class="k">Batch pendaftaran</span>
+        <span class="v" id="batchInfo">–</span>
+      </div>
+      <div class="row">
+        <span class="k">Pembayaran</span>
+        <span class="v">Transfer Bank / QRIS</span>
+      </div>
+    </div>
+
+    <div id="statusArea"></div>
+
+    <p style="text-align:center;color:var(--text-muted);font-size:13px;margin-top:20px;">
+      Sudah pesan? <a href="cek-tiket.html">Cek Status &amp; Unduh Tiket</a>
+    </p>
+  </div>
+
+<script src="js/index.js"></script>
+</body>
+</html>

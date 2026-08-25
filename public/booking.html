@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Pemesan - Loket Tiket</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar"><span class="dot"></span><span>Langkah 1 dari 3 · Data Pemesan</span></div>
+
+    <div class="ticket">
+      <h2>Isi Data Pemesan</h2>
+      <p class="lead">Semua kolom di bawah wajib diisi.</p>
+
+      <form id="bookingForm" novalidate>
+        <div class="field" id="f-email">
+          <label>Email <span class="req">*</span></label>
+          <input type="email" name="email" placeholder="nama@email.com" required>
+          <div class="error-msg">Masukkan alamat email yang valid.</div>
+        </div>
+
+        <div class="field" id="f-nama">
+          <label>Nama <span class="req">*</span></label>
+          <input type="text" name="nama" placeholder="Nama lengkap" required>
+          <div class="error-msg">Nama wajib diisi (minimal 3 karakter).</div>
+        </div>
+
+        <div class="field" id="f-no_hp">
+          <label>Nomor yang dapat dihubungi <span class="req">*</span></label>
+          <input type="tel" name="no_hp" placeholder="08xxxxxxxxxx" required>
+          <div class="error-msg">Masukkan nomor telepon yang valid.</div>
+        </div>
+
+        <div class="field" id="f-prodi">
+          <label>Prodi <span class="req">*</span></label>
+          <select name="prodi" required>
+            <option value="">Memuat daftar prodi...</option>
+          </select>
+          <div class="error-msg">Prodi wajib dipilih.</div>
+        </div>
+
+        <div class="field" id="f-tingkat">
+          <label>Tingkat <span class="req">*</span></label>
+          <select name="tingkat" required>
+            <option value="">Pilih tingkat</option>
+          </select>
+          <div class="error-msg">Tingkat wajib dipilih.</div>
+        </div>
+
+        <div class="field" id="f-jumlah_tiket">
+          <label>Jumlah tiket yang dipesan <span class="req">*</span></label>
+          <input type="number" name="jumlah_tiket" min="1" max="10" value="1" required>
+          <div class="error-msg">Jumlah tiket harus antara 1 - 10.</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="btnLanjut">
+          <span id="btnLanjutText">Lanjut ke Pembayaran</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+<script src="js/booking.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="300" height="300">
+  <rect width="300" height="300" fill="#f4f4f4"/>
+  <rect x="8" y="8" width="284" height="284" fill="none" stroke="#999" stroke-width="2" stroke-dasharray="10,8"/>
+  <text x="150" y="130" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#666">Belum ada gambar QRIS</text>
+  <text x="150" y="158" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#999">Ganti file:</text>
+  <text x="150" y="178" text-anchor="middle" font-family="monospace" font-size="12" fill="#333">public/images/qris.jpg</text>
+</svg>
