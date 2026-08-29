@@ -105,7 +105,7 @@ form.addEventListener('submit', async (e) => {
     const result = await res.json();
 
     if (!res.ok || !result.success) {
-      alert(result.errors ? result.errors.join('\n') : 'Terjadi kesalahan, coba lagi.');
+      alert(result.errors ? result.errors.join('\n') : (result.message || 'Terjadi kesalahan, coba lagi.'));
       btnLanjut.disabled = false;
       btnLanjutText.textContent = 'Lanjut ke Pembayaran';
       return;

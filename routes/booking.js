@@ -32,61 +32,73 @@ function validateBookingInput(body) {
 // Catatan: TIDAK ADA lagi batas waktu pembayaran otomatis. Pesanan tetap "pending" sampai
 // admin secara manual meng-ACC (jadi "paid") atau menolak/menandai gagal (jadi "failed").
 router.post('/', (req, res) => {
-  const settings = getSettings();
-  if (!settings.registration_open) {
-    const batchLabel = settings.current_batch === 4 ? 'OTS' : `Batch ${settings.current_batch}`;
-    return res.status(403).json({
+  try {
+    const settings = getSettings();
+    if (!settings.registration_open) {
+      const batchLabel = settings.current_batch === 4 ? 'OTS' : `Batch ${settings.current_batch}`;
+      return res.status(403).json({
+        success: false,
+        message: `Pendaftaran sedang ditutup sementara. Pantau terus untuk informasi pembukaan ${batchLabel}.`
+      });
+    }
+
+    const { errors, jumlah, tingkatNum } = validateBookingInput(req.body);
+    if (errors.length > 0) {
+      return res.status(400).json({ success: false, errors });
+    }
+
+    const { email, nama, no_hp, prodi } = req.body;
+    const emailNormalized = email.trim().toLowerCase();
+
+    // Tolak email yang masih punya pesanan AKTIF (lunas, atau pending yang belum diputuskan admin).
+    // Pesanan berstatus "failed" (ditolak/gagal admin) SENGAJA tidak dihitung di sini -
+    // supaya orang yang pesanannya gagal bisa langsung coba pesan lagi pakai email yang sama.
+    const existing = db.prepare(`
+      SELECT id FROM bookings
+      WHERE LOWER(email) = ? AND status_pembayaran IN ('paid', 'pending')
+    `).get(emailNormalized);
+
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        errors: [`Email sudah terdaftar sebagai peserta ${process.env.EVENT_NAME || 'event ini'}.`]
+      });
+    }
+
+    const hargaSatuan = settings[`price_batch_${settings.current_batch}`];
+    const totalHarga = hargaSatuan * jumlah;
+    const orderId = `TIX-${nanoidOrder()}`;
+
+    const stmt = db.prepare(`
+      INSERT INTO bookings (id, email, nama, no_hp, prodi, tingkat, jumlah_tiket, harga_satuan, total_harga, batch)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      orderId,
+      email.trim(),
+      nama.trim(),
+      no_hp.trim(),
+      prodi,
+      tingkatNum,
+      jumlah,
+      hargaSatuan,
+      totalHarga,
+      settings.current_batch
+    );
+
+    res.json({ success: true, order_id: orderId, total_harga: totalHarga });
+  } catch (err) {
+    // Kalau database sempat "sibuk" karena banyak orang submit bersamaan, busy_timeout
+    // di database.js seharusnya sudah menangani ini di level SQLite. Try/catch ini jaga-jaga
+    // supaya kalaupun masih gagal, pemesan dapat pesan yang jelas (bisa coba lagi) daripada
+    // server diam/error tanpa penjelasan.
+    console.error('Gagal membuat booking:', err);
+    res.status(503).json({
       success: false,
-      message: `Pendaftaran sedang ditutup sementara. Pantau terus untuk informasi pembukaan ${batchLabel}.`
+      message: 'Server sedang sibuk menerima banyak pesanan sekaligus. Silakan coba tekan tombol lagi dalam beberapa detik.'
     });
   }
-
-  const { errors, jumlah, tingkatNum } = validateBookingInput(req.body);
-  if (errors.length > 0) {
-    return res.status(400).json({ success: false, errors });
-  }
-
-  const { email, nama, no_hp, prodi } = req.body;
-  const emailNormalized = email.trim().toLowerCase();
-
-  // Tolak email yang masih punya pesanan AKTIF (lunas, atau pending yang belum diputuskan admin).
-  // Pesanan berstatus "failed" (ditolak/gagal admin) SENGAJA tidak dihitung di sini -
-  // supaya orang yang pesanannya gagal bisa langsung coba pesan lagi pakai email yang sama.
-  const existing = db.prepare(`
-    SELECT id FROM bookings
-    WHERE LOWER(email) = ? AND status_pembayaran IN ('paid', 'pending')
-  `).get(emailNormalized);
-
-  if (existing) {
-    return res.status(409).json({
-      success: false,
-      errors: [`Email sudah terdaftar sebagai peserta ${process.env.EVENT_NAME || 'event ini'}.`]
-    });
-  }
-
-  const hargaSatuan = settings[`price_batch_${settings.current_batch}`];
-  const totalHarga = hargaSatuan * jumlah;
-  const orderId = `TIX-${nanoidOrder()}`;
-
-  const stmt = db.prepare(`
-    INSERT INTO bookings (id, email, nama, no_hp, prodi, tingkat, jumlah_tiket, harga_satuan, total_harga, batch)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  stmt.run(
-    orderId,
-    email.trim(),
-    nama.trim(),
-    no_hp.trim(),
-    prodi,
-    tingkatNum,
-    jumlah,
-    hargaSatuan,
-    totalHarga,
-    settings.current_batch
-  );
-
-  res.json({ success: true, order_id: orderId, total_harga: totalHarga });
 });
 
 // GET /api/booking/:orderId - ambil detail pemesanan (dipakai halaman pembayaran & tiket)

@@ -123,21 +123,26 @@ router.get('/proof/:orderId', (req, res) => {
 
 // POST /api/admin/approve-payment - admin meng-ACC bukti pembayaran, status jadi "paid" + tiket dibuat
 router.post('/approve-payment', (req, res) => {
-  const { order_id } = req.body;
-  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(order_id);
-  if (!booking) return res.status(404).json({ success: false, message: 'Pemesanan tidak ditemukan.' });
-  if (booking.status_pembayaran === 'paid') {
-    return res.status(400).json({ success: false, message: 'Pemesanan ini sudah lunas.' });
+  try {
+    const { order_id } = req.body;
+    const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(order_id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Pemesanan tidak ditemukan.' });
+    if (booking.status_pembayaran === 'paid') {
+      return res.status(400).json({ success: false, message: 'Pemesanan ini sudah lunas.' });
+    }
+
+    db.prepare(`
+      UPDATE bookings SET status_pembayaran = 'paid', paid_at = datetime('now','localtime')
+      WHERE id = ?
+    `).run(order_id);
+
+    const tickets = generateTicketsForBooking(order_id, booking.jumlah_tiket);
+
+    res.json({ success: true, message: 'Pembayaran di-ACC, tiket berhasil dibuat.', jumlah_tiket: tickets.length });
+  } catch (err) {
+    console.error('Gagal ACC pembayaran:', err);
+    res.status(503).json({ success: false, message: 'Server sedang sibuk. Coba klik ACC lagi dalam beberapa detik.' });
   }
-
-  db.prepare(`
-    UPDATE bookings SET status_pembayaran = 'paid', paid_at = datetime('now','localtime')
-    WHERE id = ?
-  `).run(order_id);
-
-  const tickets = generateTicketsForBooking(order_id, booking.jumlah_tiket);
-
-  res.json({ success: true, message: 'Pembayaran di-ACC, tiket berhasil dibuat.', jumlah_tiket: tickets.length });
 });
 
 // POST /api/admin/reject-payment - admin menandai pesanan sebagai gagal/ditolak.

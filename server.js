@@ -39,19 +39,30 @@ app.use(helmet({
 // Tidak pakai CORS terbuka sama sekali - frontend & API berjalan di server & origin yang sama,
 // jadi tidak ada alasan untuk mengizinkan situs lain memanggil API ini lewat browser.
 
-// ===== Rate limiting - cegah spam & brute-force =====
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false });
+// ===== Rate limiting =====
+// Diatur LONGGAR karena prioritas utama adalah banyak orang bisa akses bersamaan
+// (termasuk yang berbagi 1 alamat IP publik yang sama, misal WiFi kampus/NAT kantor -
+// dari sudut pandang server, puluhan/ratusan orang berbeda itu bisa terlihat seperti "1 IP").
+// Ini bukan berarti tanpa proteksi sama sekali - limitnya cuma dibuat jauh lebih tinggi,
+// supaya cuma menahan skrip/bot yang benar-benar ugal-ugalan, bukan pemakaian normal.
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 3000, standardHeaders: true, legacyHeaders: false });
 const bookingLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false,
-  message: { success: false, message: 'Terlalu banyak percobaan pemesanan dari perangkat ini. Coba lagi nanti.' }
+  windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false,
+  message: { success: false, message: 'Terlalu banyak percobaan pemesanan dari jaringan ini. Coba lagi beberapa menit lagi.' }
 });
 const lookupLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false,
-  message: { success: false, message: 'Terlalu banyak percobaan pencarian. Coba lagi beberapa menit lagi.' }
+  windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false,
+  message: { success: false, message: 'Terlalu banyak percobaan pencarian dari jaringan ini. Coba lagi beberapa menit lagi.' }
 });
+// Khusus dashboard admin: skipSuccessfulRequests membuat limiter ini HANYA menghitung
+// permintaan yang GAGAL (misal salah password). Jadi berapa pun banyaknya panitia yang
+// login bersamaan, atau seberapa sering dashboard auto-refresh (tiap 15 detik), tidak akan
+// pernah kena limit selama itu berhasil (200 OK) - limiter ini murni jaga-jaga dari
+// percobaan tebak password admin berkali-kali, bukan untuk membatasi pemakaian normal.
 const adminLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false,
-  message: { success: false, message: 'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.' }
+  windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true, legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, message: 'Terlalu banyak percobaan login gagal. Coba lagi beberapa menit lagi.' }
 });
 
 app.use('/api/', apiLimiter);

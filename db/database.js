@@ -5,6 +5,17 @@ const { DB_PATH } = require('../services/storagePaths');
 
 const db = new DatabaseSync(DB_PATH);
 
+// ===== Mode WAL: penting untuk menangani BANYAK orang mengisi data bersamaan =====
+// Tanpa ini, SQLite secara default mengunci seluruh file database tiap kali ada yang
+// menulis data (misal saat orang submit booking), jadi kalau banyak orang submit di detik
+// yang sama, sebagian bisa langsung gagal dengan error "database is locked".
+// - journal_mode=WAL: mengizinkan proses baca (misal admin lihat rekap) tetap jalan
+//   sementara ada proses tulis lain (misal orang lain submit booking) di waktu bersamaan.
+// - busy_timeout=8000: kalau memang lagi rebutan akses tulis, SQLite akan MENUNGGU
+//   sampai 8 detik dan otomatis coba lagi, bukan langsung menyerah dengan error.
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA busy_timeout = 8000');
+
 // schema.sql SELALU dibaca dari folder kode (bukan dari volume), jadi aman walau lokasi
 // database (DB_PATH) dipindah ke volume terpisah di server produksi.
 const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');

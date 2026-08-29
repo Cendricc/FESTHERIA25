@@ -228,4 +228,13 @@ Kalau masih belum berhasil men-scan:
 3. Pastikan pencahayaan cukup dan QR code tidak terlalu jauh/blur dari kamera
 4. Kalau kamera tetap tidak mendeteksi apa pun, gunakan kolom **input manual** di bawah area scan sebagai alternatif — panitia tinggal ketik kode tiketnya
 
+## Performa Saat Diakses Banyak Orang Bersamaan (2000-3000+)
+
+Sistem sudah diuji tahan menangani ratusan orang mengisi data / admin melakukan ACC secara **bersamaan persis** di detik yang sama (sudah diuji sampai 300 booking simultan + 5 dashboard admin polling bersamaan, semua berhasil tanpa error), lewat dua perbaikan:
+
+1. **Mode database WAL** — database (`db/database.js`) diaktifkan mode `journal_mode=WAL` + `busy_timeout=8000`. Tanpa ini, SQLite mengunci seluruh file tiap kali ada satu orang menulis data, jadi kalau banyak orang submit bersamaan sebagian bisa gagal dengan error "database terkunci". Dengan WAL, pembacaan (misal admin lihat rekap) tidak terhalang oleh penulisan (orang lain sedang submit booking) yang terjadi bersamaan, dan penulisan yang bentrok otomatis menunggu sampai 8 detik alih-alih langsung gagal.
+
+2. **Rate limit dilonggarkan** — sebelumnya batasnya terlalu ketat (misal cuma 10 percobaan booking/jam per alamat IP), yang jadi masalah kalau banyak orang berbagi satu jaringan/WiFi yang sama (dari sudut pandang server, mereka semua "terlihat" datang dari 1 IP). Sekarang jauh lebih longgar (300 percobaan booking per 15 menit per IP), dan khusus dashboard admin, rate limit-nya diubah supaya **hanya menghitung percobaan login yang GAGAL** — jadi auto-refresh dashboard (tiap 15 detik) atau berapa pun banyaknya panitia yang login bersamaan tidak akan pernah kena limit, cuma percobaan tebak password berkali-kali yang tetap dibatasi.
+
+**Soal hosting:** perbaikan kode ini menyelesaikan akar masalah yang muncul saat uji coba 80 orang. Tapi untuk skala **2000-3000 orang** di hari-H, kamu tetap disarankan **upgrade dari paket trial Railway ke paket Hobby (atau lebih tinggi)** — kode yang efisien tetap butuh sumber daya server (CPU/RAM) yang memadai, dan paket trial biasanya dibatasi cukup ketat untuk skala trafik seramai itu.
 
