@@ -70,7 +70,7 @@ async function doLookup(orderId, email) {
       // Sambil pembeli membuka halaman ini, cek ulang status tiap beberapa detik -
       // kalau admin meng-ACC saat itu juga, halaman otomatis update ke tampilan tiket.
       clearInterval(pollTimer);
-      pollTimer = setInterval(() => doLookup(lastLookup.order_id, lastLookup.email), 8000);
+      pollTimer = setInterval(() => doLookup(lastLookup.order_id, lastLookup.email), 15000);
     }
   } catch (err) {
     renderForm('Gagal terhubung ke server. Coba lagi.');

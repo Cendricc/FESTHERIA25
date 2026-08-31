@@ -3,6 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const db = require('../db/database');
 const { getSettings, updateSettings } = require('../services/settingsService');
 const { generateTicketsForBooking } = require('../services/qrService');
@@ -22,6 +23,37 @@ function timingSafeStringEqual(a, b) {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+// Cek username+password BENAR atau tidak, dipisah dari middleware auth supaya bisa dipakai
+// juga oleh rate limiter di bawah (lihat catatan di loginAttemptLimiter).
+function hasValidAdminCredentials(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Basic ')) return false;
+
+  const decoded = Buffer.from(authHeader.split(' ')[1], 'base64').toString('utf8');
+  const [username, password] = decoded.split(':');
+  const usernameOk = timingSafeStringEqual(username || '', process.env.ADMIN_USERNAME || '');
+  const passwordOk = timingSafeStringEqual(password || '', process.env.ADMIN_PASSWORD || '');
+  return usernameOk && passwordOk;
+}
+
+// Rate limiter KHUSUS untuk cegah tebak-tebakan password admin berkali-kali.
+// PENTING: cara kerjanya beda dari limiter lain - ini menghitung berdasarkan BENAR/SALAH
+// kredensialnya, BUKAN berdasarkan kode status HTTP yang dihasilkan endpoint-nya.
+// Kenapa ini penting: endpoint seperti check-in/approve-payment itu WAJAR menghasilkan
+// status "gagal" (404 tiket tidak ketemu, 409 sudah pernah check-in, dst) sebagai bagian
+// dari pemakaian normal sehari-hari (misal banyak orang di pintu masuk scan tiket yang
+// sama dua kali) - itu BUKAN tanda ada yang coba membobol sistem, jadi tidak boleh ikut
+// mengurangi jatah limit. Yang bener-bener mau dicegah cuma nebak password berkali-kali.
+const loginAttemptLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => hasValidAdminCredentials(req), // kredensial benar -> tidak dihitung sama sekali, apapun hasil endpoint-nya nanti
+  message: { success: false, message: 'Terlalu banyak percobaan login gagal. Coba lagi beberapa menit lagi.' }
+});
+router.use(loginAttemptLimiter);
+
 // Middleware auth sederhana pakai Basic Auth (cukup untuk skala panitia internal).
 function requireAdminAuth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -30,12 +62,7 @@ function requireAdminAuth(req, res, next) {
     return res.status(401).json({ success: false, message: 'Autentikasi diperlukan.' });
   }
 
-  const decoded = Buffer.from(authHeader.split(' ')[1], 'base64').toString('utf8');
-  const [username, password] = decoded.split(':');
-  const usernameOk = timingSafeStringEqual(username || '', process.env.ADMIN_USERNAME || '');
-  const passwordOk = timingSafeStringEqual(password || '', process.env.ADMIN_PASSWORD || '');
-
-  if (!usernameOk || !passwordOk) {
+  if (!hasValidAdminCredentials(req)) {
     res.set('WWW-Authenticate', 'Basic realm="Admin Panitia"');
     return res.status(401).json({ success: false, message: 'Username atau password salah.' });
   }

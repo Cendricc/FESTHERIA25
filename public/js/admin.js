@@ -188,7 +188,7 @@ function getSortedBookings() {
 function renderTable() {
   const tbody = document.getElementById('bookingTbody');
   if (allBookings.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="14" style="text-align:center;color:var(--text-muted);">Belum ada data.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" style="text-align:center;color:var(--text-muted);">Belum ada data.</td></tr>`;
     return;
   }
 
@@ -218,6 +218,7 @@ function renderTable() {
       <tr>
         <td>${escapeHtml(b.id)}</td>
         <td>${escapeHtml(batchLabel(b.batch))}</td>
+        <td>${escapeHtml(b.created_at)}</td>
         <td>${escapeHtml(b.nama)}</td>
         <td>${escapeHtml(b.email)}</td>
         <td>${escapeHtml(b.no_hp)}</td>

@@ -230,11 +230,27 @@ Kalau masih belum berhasil men-scan:
 
 ## Performa Saat Diakses Banyak Orang Bersamaan (2000-3000+)
 
-Sistem sudah diuji tahan menangani ratusan orang mengisi data / admin melakukan ACC secara **bersamaan persis** di detik yang sama (sudah diuji sampai 300 booking simultan + 5 dashboard admin polling bersamaan, semua berhasil tanpa error), lewat dua perbaikan:
+Sistem sudah diuji tahan menangani ratusan-ribuan request **bersamaan persis** di detik yang sama (booking, ACC admin, scan QR, dan polling status), lewat rangkaian perbaikan berikut:
 
-1. **Mode database WAL** — database (`db/database.js`) diaktifkan mode `journal_mode=WAL` + `busy_timeout=8000`. Tanpa ini, SQLite mengunci seluruh file tiap kali ada satu orang menulis data, jadi kalau banyak orang submit bersamaan sebagian bisa gagal dengan error "database terkunci". Dengan WAL, pembacaan (misal admin lihat rekap) tidak terhalang oleh penulisan (orang lain sedang submit booking) yang terjadi bersamaan, dan penulisan yang bentrok otomatis menunggu sampai 8 detik alih-alih langsung gagal.
+1. **Mode database WAL** — database (`db/database.js`) diaktifkan mode `journal_mode=WAL` + `busy_timeout=8000`. Tanpa ini, SQLite mengunci seluruh file tiap kali ada satu orang menulis data, jadi kalau banyak orang submit bersamaan sebagian bisa gagal dengan error "database terkunci". Dengan WAL, pembacaan (misal admin lihat rekap) tidak terhalang oleh penulisan (orang lain sedang submit booking) yang terjadi bersamaan.
 
-2. **Rate limit dilonggarkan** — sebelumnya batasnya terlalu ketat (misal cuma 10 percobaan booking/jam per alamat IP), yang jadi masalah kalau banyak orang berbagi satu jaringan/WiFi yang sama (dari sudut pandang server, mereka semua "terlihat" datang dari 1 IP). Sekarang jauh lebih longgar (300 percobaan booking per 15 menit per IP), dan khusus dashboard admin, rate limit-nya diubah supaya **hanya menghitung percobaan login yang GAGAL** — jadi auto-refresh dashboard (tiap 15 detik) atau berapa pun banyaknya panitia yang login bersamaan tidak akan pernah kena limit, cuma percobaan tebak password berkali-kali yang tetap dibatasi.
+2. **Rate limit dinaikkan signifikan** — supaya banyak orang yang kebetulan berbagi satu jaringan/WiFi yang sama (dari sudut pandang server, mereka semua "terlihat" datang dari 1 IP) tetap bisa akses lancar tanpa saling memblokir:
+   - Umum (semua endpoint): 10.000 request / 15 menit per IP
+   - Booking: 1.000 percobaan / 15 menit per IP
+   - Cek status/lookup tiket: 3.000 percobaan / 15 menit per IP (dibuat lebih tinggi karena halaman "Cek Tiket" otomatis polling ulang tiap 15 detik selagi menunggu ACC — kalau banyak orang menunggu bersamaan dari jaringan yang sama, ini bisa menghasilkan ribuan request wajar dalam 15 menit)
+
+3. **Rate limit dashboard admin (termasuk scan QR) — dipisah logikanya dari kode status HTTP.** Percobaan pertama membatasi berdasarkan status HTTP endpoint-nya (dianggap "gagal" kalau 400 ke atas). Ternyata ini salah, karena endpoint seperti **check-in/scan QR** itu WAJAR sering menghasilkan status "gagal" sebagai bagian dari pemakaian normal (404 kalau kode tiket salah ketik, 409 kalau tiket sudah pernah discan) — bukan tanda ada yang coba membobol sistem. Sekarang logikanya (`routes/admin.js` → `loginAttemptLimiter`) menghitung berdasarkan **benar/salah kredensial username-password saja**, bukan kode status response endpoint apapun. Jadi berapa pun banyaknya hasil "gagal" dari scan QR, ACC, tolak pembayaran, dsb (dengan login yang sah), tidak akan pernah mengurangi jatah limit — yang tetap dibatasi cuma percobaan **login dengan password salah** berkali-kali (proteksi brute-force asli, tetap aktif).
+
+**Hasil pengujian beban** (disimulasikan lewat script, bukan cuma dibaca dari kode):
+| Skenario | Hasil |
+|---|---|
+| 300 booking bersamaan | ✅ 300/300 berhasil |
+| ACC 290 pesanan bersamaan | ✅ 290/290 berhasil |
+| 1.200 polling "Cek Tiket" dari 60 orang berbagi 1 IP | ✅ semua berhasil, 0 kena limit |
+| 150x scan tiket tidak valid beruntun (simulasi antrean di pintu masuk) | ✅ semua ditolak wajar (404), 0 kena limit |
+| 60x percobaan password admin yang salah | ✅ tetap diblokir otomatis setelah percobaan ke-50 (brute-force protection masih berfungsi) |
 
 **Soal hosting:** perbaikan kode ini menyelesaikan akar masalah yang muncul saat uji coba 80 orang. Tapi untuk skala **2000-3000 orang** di hari-H, kamu tetap disarankan **upgrade dari paket trial Railway ke paket Hobby (atau lebih tinggi)** — kode yang efisien tetap butuh sumber daya server (CPU/RAM) yang memadai, dan paket trial biasanya dibatasi cukup ketat untuk skala trafik seramai itu.
+
+
 

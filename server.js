@@ -45,28 +45,28 @@ app.use(helmet({
 // dari sudut pandang server, puluhan/ratusan orang berbeda itu bisa terlihat seperti "1 IP").
 // Ini bukan berarti tanpa proteksi sama sekali - limitnya cuma dibuat jauh lebih tinggi,
 // supaya cuma menahan skrip/bot yang benar-benar ugal-ugalan, bukan pemakaian normal.
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 3000, standardHeaders: true, legacyHeaders: false });
+//
+// Perhatian khusus: halaman "Cek Tiket" (cek-tiket.js) otomatis mengecek status berkali-kali
+// tiap beberapa detik selagi menunggu ACC admin - kalau banyak orang melakukan ini bersamaan
+// dari jaringan yang sama, itu bisa menghasilkan RIBUAN request dalam 15 menit dari satu
+// alamat IP yang sama, padahal itu sepenuhnya pemakaian normal (bukan serangan). Makanya
+// lookupLimiter sengaja dibuat jauh lebih tinggi daripada limiter lain.
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10000, standardHeaders: true, legacyHeaders: false });
 const bookingLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 300, standardHeaders: true, legacyHeaders: false,
+  windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false,
   message: { success: false, message: 'Terlalu banyak percobaan pemesanan dari jaringan ini. Coba lagi beberapa menit lagi.' }
 });
 const lookupLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false,
+  windowMs: 15 * 60 * 1000, max: 3000, standardHeaders: true, legacyHeaders: false,
   message: { success: false, message: 'Terlalu banyak percobaan pencarian dari jaringan ini. Coba lagi beberapa menit lagi.' }
 });
-// Khusus dashboard admin: skipSuccessfulRequests membuat limiter ini HANYA menghitung
-// permintaan yang GAGAL (misal salah password). Jadi berapa pun banyaknya panitia yang
-// login bersamaan, atau seberapa sering dashboard auto-refresh (tiap 15 detik), tidak akan
-// pernah kena limit selama itu berhasil (200 OK) - limiter ini murni jaga-jaga dari
-// percobaan tebak password admin berkali-kali, bukan untuk membatasi pemakaian normal.
-const adminLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true, legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  message: { success: false, message: 'Terlalu banyak percobaan login gagal. Coba lagi beberapa menit lagi.' }
-});
+// Catatan: rate limiter khusus dashboard admin (proteksi brute-force password) sekarang
+// ditangani di dalam routes/admin.js sendiri (loginAttemptLimiter) - supaya bisa menghitung
+// berdasarkan BENAR/SALAH kredensial, bukan berdasarkan kode status HTTP endpoint-nya
+// (endpoint seperti check-in itu wajar sering menghasilkan status "gagal" 404/409 sebagai
+// bagian dari pemakaian normal, jadi tidak boleh ikut kena limit brute-force login).
 
 app.use('/api/', apiLimiter);
-app.use('/api/admin', adminLimiter);
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
