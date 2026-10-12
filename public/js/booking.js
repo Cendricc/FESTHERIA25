@@ -111,6 +111,7 @@ form.addEventListener('submit', async (e) => {
       return;
     }
 
+    if (result.resumed && result.message) alert(result.message);
     window.location.href = `payment.html?order_id=${result.order_id}`;
   } catch (err) {
     alert('Gagal terhubung ke server. Periksa koneksi kamu dan coba lagi.');

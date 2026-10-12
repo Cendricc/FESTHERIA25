@@ -254,3 +254,9 @@ Sistem sudah diuji tahan menangani ratusan-ribuan request **bersamaan persis** d
 
 
 
+
+## Pemesan yang kembali sebelum kirim bukti
+- Email sudah terdaftar, status `pending`, belum ada bukti, dan **No HP sama** → otomatis dilanjutkan ke halaman pembayaran pesanan yang sama (tidak ada pesanan dobel).
+- No HP berbeda → ditolak (mencegah orang membajak pesanan dengan menebak email).
+- Bukti sudah dikirim / sudah lunas → diarahkan ke halaman "Cek Tiket".
+- Di "Cek Tiket", pesanan pending tanpa bukti punya tombol "Upload Bukti Pembayaran".

@@ -81,10 +81,11 @@ function renderPending(adaBukti) {
   content.innerHTML = `
     <div class="ticket" style="text-align:center;">
       <span class="badge badge-pending">Menunggu Verifikasi</span>
-      <h2 style="margin-top:14px;">Bukti Pembayaran Kamu Sedang Ditinjau</h2>
+      <h2 style="margin-top:14px;">${adaBukti ? 'Bukti Pembayaran Kamu Sedang Ditinjau' : 'Menunggu Bukti Pembayaran'}</h2>
       <p class="lead">${adaBukti
         ? 'Panitia akan memeriksa bukti pembayaran kamu secepatnya. Halaman ini otomatis update begitu pembayaran dikonfirmasi.'
-        : 'Kami belum menerima bukti pembayaran untuk pesanan ini.'}</p>
+        : 'Kami belum menerima bukti pembayaran untuk pesanan ini. Silakan kirim bukti transfer kamu.'}</p>
+      ${adaBukti ? '' : `<a class="btn btn-primary" href="payment.html?order_id=${encodeURIComponent(lastLookup.order_id)}" style="text-decoration:none;margin-bottom:12px;">Upload Bukti Pembayaran</a>`}
       <div class="center-loading"><span class="spinner" style="border-top-color: var(--gold);"></span> Memeriksa status...</div>
     </div>
     <button class="btn btn-secondary" id="btnGantiData" style="margin-bottom:10px;">Cek dengan Data Lain</button>
