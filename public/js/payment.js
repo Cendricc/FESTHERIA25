@@ -171,7 +171,7 @@ function renderSuccessScreen(booking) {
     <div class="ticket" style="text-align:center;">
       <span class="badge badge-pending">Bukti Terkirim</span>
       <h2 style="margin-top:14px;">Bukti Pembayaran Berhasil Dikirim</h2>
-      <p class="lead">Panitia akan memeriksa bukti pembayaran kamu secepatnya. Catat Order ID di bawah ini untuk mengecek status atau mengunduh tiket kapan saja.</p>
+      <p class="lead">Panitia akan memeriksa bukti pembayaran kamu secepatnya. Untuk mengecek status atau mengunduh tiket kapan saja, buka halaman "Cek Tiket" dan masukkan Email + Nomor HP yang kamu pakai saat mendaftar (Order ID di bawah opsional).</p>
       <div class="perforation"></div>
       <div class="kode-tiket" style="font-size:18px;">${escapeHtml(booking.id)}</div>
     </div>

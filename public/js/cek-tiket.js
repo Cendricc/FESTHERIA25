@@ -11,7 +11,7 @@ function renderForm(errorMsg) {
   content.innerHTML = `
     <div class="ticket">
       <h2>Cek Status &amp; Unduh Tiket</h2>
-      <p class="lead">Masukkan Email dan Booking ID (Order ID) yang kamu pakai saat memesan.</p>
+      <p class="lead">Masukkan Email dan Nomor HP yang kamu pakai saat mendaftar.</p>
 
       ${errorMsg ? `<div class="alert alert-error">${escapeHtml(errorMsg)}</div>` : ''}
 
@@ -21,8 +21,12 @@ function renderForm(errorMsg) {
           <input type="email" id="inputEmail" required>
         </div>
         <div class="field">
-          <label>Booking ID / Order ID <span class="req">*</span></label>
-          <input type="text" id="inputOrderId" placeholder="TIX-XXXXXXXX" value="${escapeHtml(prefillOrderId)}" required>
+          <label>Nomor HP <span class="req">*</span></label>
+          <input type="tel" id="inputNoHp" placeholder="08xxxxxxxxxx" autocomplete="tel">
+        </div>
+        <div class="field">
+          <label>Booking ID <span style="color:var(--text-muted);font-weight:normal;">(opsional, kalau punya)</span></label>
+          <input type="text" id="inputOrderId" placeholder="TIX-XXXXXXXX" value="${escapeHtml(prefillOrderId)}">
         </div>
         <button type="submit" class="btn btn-primary" id="btnCek">Cek Status</button>
       </form>
@@ -32,23 +36,24 @@ function renderForm(errorMsg) {
   document.getElementById('lookupForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = document.getElementById('inputEmail').value.trim();
+    const noHp = document.getElementById('inputNoHp').value.trim();
     const orderId = document.getElementById('inputOrderId').value.trim();
-    if (!email || !orderId) return;
+    if (!email || (!noHp && !orderId)) return;
 
     const btn = document.getElementById('btnCek');
     btn.disabled = true;
     btn.innerHTML = `<span class="spinner"></span> Memeriksa...`;
 
-    await doLookup(orderId, email);
+    await doLookup(orderId, email, noHp);
   });
 }
 
-async function doLookup(orderId, email) {
+async function doLookup(orderId, email, noHp) {
   try {
     const res = await fetch('/api/payment/lookup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order_id: orderId, email })
+      body: JSON.stringify({ order_id: orderId, email, no_hp: noHp || '' })
     });
     const result = await res.json();
 
@@ -57,6 +62,8 @@ async function doLookup(orderId, email) {
       return;
     }
 
+    // Server mengembalikan Order ID hasil pencarian - dipakai untuk polling & ambil tiket.
+    orderId = result.order_id;
     lastLookup = { order_id: orderId, email };
 
     if (result.status === 'paid') {

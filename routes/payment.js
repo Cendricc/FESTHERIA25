@@ -107,29 +107,74 @@ router.post('/submit-proof', (req, res) => {
 
 // POST /api/payment/lookup - pembeli cek status/ambil tiket dengan input Email + Order ID.
 // Ini "gerbang" utama supaya orang tidak bisa lihat data/tiket orang lain hanya dengan menebak Order ID.
+// Pembatas percobaan GAGAL per email (di memori): mencegah orang menebak No HP / Booking ID
+// untuk satu email. Percobaan benar tidak dihitung. 10 gagal / 15 menit per email.
+const failedLookups = new Map(); // email -> { count, resetAt }
+const MAX_FAILED = 10;
+const WINDOW_MS = 15 * 60 * 1000;
+
+function isBlocked(email) {
+  const rec = failedLookups.get(email);
+  if (!rec) return false;
+  if (Date.now() > rec.resetAt) { failedLookups.delete(email); return false; }
+  return rec.count >= MAX_FAILED;
+}
+function recordFailure(email) {
+  const rec = failedLookups.get(email);
+  if (!rec || Date.now() > rec.resetAt) failedLookups.set(email, { count: 1, resetAt: Date.now() + WINDOW_MS });
+  else rec.count += 1;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of failedLookups) if (now > v.resetAt) failedLookups.delete(k);
+}, WINDOW_MS).unref();
+
+// Samakan format nomor: "+62812-345" dan "0812345" dianggap sama.
+function normPhone(v) {
+  return String(v || '').replace(/\D/g, '').replace(/^62/, '0');
+}
+
+// POST /api/payment/lookup - pembeli cek status/ambil tiket dengan Email + No HP
+// (Booking ID juga masih bisa dipakai sebagai pengganti No HP).
 router.post('/lookup', (req, res) => {
   const orderId = (req.body.order_id || '').trim();
   const email = (req.body.email || '').trim().toLowerCase();
+  const noHp = normPhone(req.body.no_hp);
 
-  if (!orderId || !email) {
-    return res.status(400).json({ success: false, message: 'Email dan Booking ID wajib diisi.' });
+  if (!email || (!noHp && !orderId)) {
+    return res.status(400).json({ success: false, message: 'Email dan Nomor HP wajib diisi.' });
+  }
+  if (isBlocked(email)) {
+    return res.status(429).json({ success: false, message: 'Terlalu banyak percobaan gagal untuk email ini. Coba lagi dalam 15 menit.' });
   }
 
-  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(orderId);
+  let booking = null;
+  if (orderId) {
+    const b = db.prepare('SELECT * FROM bookings WHERE id = ?').get(orderId);
+    if (b && b.email.trim().toLowerCase() === email) booking = b;
+  } else {
+    // Prioritas: pesanan aktif (paid/pending) dulu, baru yang gagal terbaru.
+    const rows = db.prepare(`
+      SELECT * FROM bookings WHERE LOWER(TRIM(email)) = ?
+      ORDER BY CASE status_pembayaran WHEN 'paid' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END, created_at DESC
+    `).all(email);
+    booking = rows.find((r) => normPhone(r.no_hp) === noHp) || null;
+  }
 
-  // Pesan error sengaja dibuat generik (tidak membedakan "order id salah" vs "email salah")
-  // supaya tidak bisa dipakai orang lain untuk menebak-nebak/mengonfirmasi data pemesan.
-  if (!booking || booking.email.trim().toLowerCase() !== email) {
-    return res.status(404).json({ success: false, message: 'Data tidak ditemukan. Pastikan Email dan Booking ID sudah benar.' });
+  // Pesan error sengaja generik (tidak membedakan email salah / HP salah) supaya tidak bisa
+  // dipakai menebak data pemesan lain.
+  if (!booking) {
+    recordFailure(email);
+    return res.status(404).json({ success: false, message: 'Data tidak ditemukan. Pastikan Email dan Nomor HP sama seperti saat mendaftar.' });
   }
 
   if (booking.status_pembayaran === 'paid') {
-    return res.json({ success: true, status: 'paid' });
+    return res.json({ success: true, status: 'paid', order_id: booking.id });
   }
   if (booking.status_pembayaran === 'failed') {
-    return res.json({ success: true, status: 'failed' });
+    return res.json({ success: true, status: 'failed', order_id: booking.id });
   }
-  return res.json({ success: true, status: 'pending', ada_bukti: !!booking.bukti_pembayaran });
+  return res.json({ success: true, status: 'pending', order_id: booking.id, ada_bukti: !!booking.bukti_pembayaran });
 });
 
 // GET /api/payment/ticket/:orderId?email=... - ambil data tiket + QR (satu per lembar) setelah lunas.
