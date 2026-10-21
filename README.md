@@ -265,3 +265,8 @@ Sistem sudah diuji tahan menangani ratusan-ribuan request **bersamaan persis** d
 - Pembeli cukup memasukkan Email + Nomor HP saat mendaftar (Booking ID sekarang opsional).
 - Format nomor disamakan (`0812…` = `+62812…`). Pesan error generik.
 - Pembatas: 10 percobaan GAGAL per email per 15 menit (percobaan benar tidak dihitung).
+
+## Dashboard admin: hanya pesanan yang sudah upload bukti
+- Pesanan baru muncul di dashboard admin (rekap, statistik, CSV) HANYA setelah pemesan mengunggah bukti pembayaran. Yang masih di halaman pembayaran tidak tampil.
+- "Tiket Terjual" dan rincian per batch langsung menghitung jumlah tiket sejak bukti masuk (tanpa menunggu ACC); ditampilkan juga berapa yang sudah ACC / masih menunggu.
+- "Pendapatan" tetap hanya menghitung yang sudah di-ACC.

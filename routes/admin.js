@@ -76,9 +76,13 @@ router.use(requireAdminAuth);
 // PENTING: status=all / status=active TIDAK PERNAH menyertakan pesanan berstatus "failed" -
 // data gagal/ditolak sengaja dipisah dan hanya bisa diambil lewat status=failed secara eksplisit
 // (dipakai tab "Data Gagal/Kedaluwarsa" yang terpisah dari rekap utama & tidak ikut ke-export CSV utama).
+// Pesanan BARU MASUK ke dashboard admin setelah pemesan mengunggah bukti pembayaran
+// (pesanan yang masih di halaman pembayaran / belum kirim bukti disembunyikan).
+const VISIBLE_SQL = `(bukti_pembayaran IS NOT NULL OR status_pembayaran = 'paid')`;
+
 router.get('/bookings', (req, res) => {
   const { status, batch } = req.query;
-  const conditions = [];
+  const conditions = [VISIBLE_SQL];
   const values = [];
 
   if (!status || status === 'all' || status === 'active') {
@@ -108,30 +112,40 @@ router.get('/bookings', (req, res) => {
 // totalPemesanan/totalPending/totalLunas SENGAJA tidak menghitung pesanan "failed" -
 // itu dihitung terpisah (totalGagal) supaya tidak mengotori statistik utama.
 router.get('/summary', (req, res) => {
-  const totalPemesanan = db.prepare("SELECT COUNT(*) AS c FROM bookings WHERE status_pembayaran IN ('pending','paid')").get().c;
-  const totalLunas = db.prepare("SELECT COUNT(*) AS c FROM bookings WHERE status_pembayaran = 'paid'").get().c;
-  const totalPending = db.prepare("SELECT COUNT(*) AS c FROM bookings WHERE status_pembayaran = 'pending'").get().c;
-  const totalGagal = db.prepare("SELECT COUNT(*) AS c FROM bookings WHERE status_pembayaran = 'failed'").get().c;
-  const totalTiketTerjual = db.prepare("SELECT COALESCE(SUM(jumlah_tiket),0) AS c FROM bookings WHERE status_pembayaran = 'paid'").get().c;
-  const totalPendapatan = db.prepare("SELECT COALESCE(SUM(total_harga),0) AS c FROM bookings WHERE status_pembayaran = 'paid'").get().c;
-  const totalHadir = db.prepare('SELECT COUNT(*) AS c FROM tickets WHERE checked_in = 1').get().c;
+  const V = VISIBLE_SQL;
+  const one = (sql) => db.prepare(sql).get().c;
+  const totalPemesanan = one(`SELECT COUNT(*) AS c FROM bookings WHERE ${V} AND status_pembayaran IN ('pending','paid')`);
+  const totalLunas = one(`SELECT COUNT(*) AS c FROM bookings WHERE ${V} AND status_pembayaran = 'paid'`);
+  const totalPending = one(`SELECT COUNT(*) AS c FROM bookings WHERE ${V} AND status_pembayaran = 'pending'`);
+  const totalGagal = one(`SELECT COUNT(*) AS c FROM bookings WHERE ${V} AND status_pembayaran = 'failed'`);
+  // Tiket terjual = semua tiket dari pesanan yang sudah masuk dashboard (bukti terkirim), tanpa
+  // menunggu ACC. totalTiketLunas = bagian yang sudah di-ACC.
+  const totalTiketTerjual = one(`SELECT COALESCE(SUM(jumlah_tiket),0) AS c FROM bookings WHERE ${V} AND status_pembayaran IN ('pending','paid')`);
+  const totalTiketLunas = one(`SELECT COALESCE(SUM(jumlah_tiket),0) AS c FROM bookings WHERE status_pembayaran = 'paid'`);
+  const totalPendapatan = one(`SELECT COALESCE(SUM(total_harga),0) AS c FROM bookings WHERE status_pembayaran = 'paid'`);
+  const totalHadir = one('SELECT COUNT(*) AS c FROM tickets WHERE checked_in = 1');
 
-  // Rincian jumlah pendaftar per batch (1/2/3/4=OTS) - hanya menghitung yang aktif (pending+paid),
-  // dipakai untuk kartu "Pendaftar per Batch" di dashboard supaya panitia bisa pantau real-time.
+  // Rincian per batch (1/2/3/4=OTS): jumlah pemesan DAN jumlah tiket (pending+paid, bukti sudah terkirim).
   const batchBreakdown = [1, 2, 3, 4].map((batchNum) => {
     const row = db.prepare(`
       SELECT
         COUNT(*) AS total,
         SUM(CASE WHEN status_pembayaran = 'paid' THEN 1 ELSE 0 END) AS lunas,
-        SUM(CASE WHEN status_pembayaran = 'pending' THEN 1 ELSE 0 END) AS pending
-      FROM bookings WHERE batch = ? AND status_pembayaran IN ('pending','paid')
+        SUM(CASE WHEN status_pembayaran = 'pending' THEN 1 ELSE 0 END) AS pending,
+        COALESCE(SUM(jumlah_tiket), 0) AS tiket,
+        COALESCE(SUM(CASE WHEN status_pembayaran = 'paid' THEN jumlah_tiket ELSE 0 END), 0) AS tiket_lunas,
+        COALESCE(SUM(CASE WHEN status_pembayaran = 'pending' THEN jumlah_tiket ELSE 0 END), 0) AS tiket_pending
+      FROM bookings WHERE batch = ? AND ${V} AND status_pembayaran IN ('pending','paid')
     `).get(batchNum);
-    return { batch: batchNum, total: row.total || 0, lunas: row.lunas || 0, pending: row.pending || 0 };
+    return {
+      batch: batchNum, total: row.total || 0, lunas: row.lunas || 0, pending: row.pending || 0,
+      tiket: row.tiket || 0, tiket_lunas: row.tiket_lunas || 0, tiket_pending: row.tiket_pending || 0
+    };
   });
 
   res.json({
     success: true,
-    summary: { totalPemesanan, totalLunas, totalPending, totalGagal, totalTiketTerjual, totalPendapatan, totalHadir, batchBreakdown }
+    summary: { totalPemesanan, totalLunas, totalPending, totalGagal, totalTiketTerjual, totalTiketLunas, totalPendapatan, totalHadir, batchBreakdown }
   });
 });
 

@@ -124,16 +124,16 @@ async function loadSummary() {
       <div class="stat-card"><div class="num">${s.totalPemesanan}</div><div class="label">Total Pemesanan</div></div>
       <div class="stat-card"><div class="num">${s.totalLunas}</div><div class="label">Lunas</div></div>
       <div class="stat-card"><div class="num">${s.totalPending}</div><div class="label">Menunggu Verifikasi</div></div>
-      <div class="stat-card"><div class="num">${s.totalTiketTerjual}</div><div class="label">Tiket Terjual</div></div>
+      <div class="stat-card"><div class="num">${s.totalTiketTerjual}</div><div class="label">Tiket Terjual <span style="opacity:0.7;">(${s.totalTiketLunas} sudah ACC)</span></div></div>
       <div class="stat-card"><div class="num">${s.totalHadir}</div><div class="label">Sudah Hadir</div></div>
-      <div class="stat-card"><div class="num" style="font-size:18px;">${formatRupiah(s.totalPendapatan)}</div><div class="label">Total Pendapatan</div></div>
+      <div class="stat-card"><div class="num" style="font-size:18px;">${formatRupiah(s.totalPendapatan)}</div><div class="label">Pendapatan (sudah ACC)</div></div>
       <div class="stat-card"><div class="num" style="color:var(--text-muted);">${s.totalGagal}</div><div class="label">Gagal/Ditolak (lihat tab terpisah)</div></div>
     `;
 
     document.getElementById('batchBreakdownGrid').innerHTML = s.batchBreakdown.map((b) => `
       <div class="stat-card">
-        <div class="num">${b.total}</div>
-        <div class="label">${batchLabel(b.batch)} <span style="opacity:0.7;">(${b.lunas} lunas, ${b.pending} pending)</span></div>
+        <div class="num">${b.tiket} <span style="font-size:13px;font-weight:normal;opacity:0.7;">tiket</span></div>
+        <div class="label">${batchLabel(b.batch)} &mdash; ${b.total} pemesan <span style="opacity:0.7;">(${b.tiket_lunas} tiket ACC, ${b.tiket_pending} menunggu)</span></div>
       </div>
     `).join('');
   } catch (err) {
