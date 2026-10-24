@@ -96,6 +96,7 @@ function initDashboard() {
   setupScanner();
   setupBatchControls();
   setupModal();
+  setupAccModal();
   setupTableActions();
   setupSort();
 
@@ -224,7 +225,7 @@ function renderTable() {
         <td>${escapeHtml(b.no_hp)}</td>
         <td>${escapeHtml(b.prodi)}</td>
         <td>${escapeHtml(b.tingkat)}</td>
-        <td>${escapeHtml(b.jumlah_tiket)}</td>
+        <td>${escapeHtml(b.jumlah_tiket)}${b.jumlah_dipesan && b.jumlah_dipesan !== b.jumlah_tiket ? ` <span style="font-size:11px;color:var(--text-muted);">(dipesan ${escapeHtml(b.jumlah_dipesan)})</span>` : ''}</td>
         <td>${formatRupiah(b.total_harga)}</td>
         <td><span class="badge badge-${statusClass}">${escapeHtml(b.status_pembayaran)}</span></td>
         <td>${buktiCell}</td>
@@ -261,11 +262,57 @@ function setupTableActions() {
   });
 }
 
-async function approvePayment(orderId) {
-  if (!confirm(`ACC pembayaran untuk pesanan ${orderId}? Tiket QR akan langsung diterbitkan untuk pembeli.`)) return;
-  const result = await apiPost('/api/admin/approve-payment', { order_id: orderId });
-  if (result.success) { loadSummary(); loadBookings(); }
-  else alert(result.message || 'Gagal meng-ACC pembayaran.');
+// ===== MODAL ACC PEMBAYARAN (bisa ACC sebagian sesuai jumlah yang dibayar) =====
+let accOrder = null;
+
+function openAccModal(orderId) {
+  const b = allBookings.find((x) => x.id === orderId);
+  if (!b) return;
+  accOrder = b;
+  document.getElementById('accInfo').innerHTML =
+    `${escapeHtml(b.id)} &middot; ${escapeHtml(b.nama)}<br>Dipesan: ${escapeHtml(b.jumlah_tiket)} tiket &times; ${formatRupiah(b.harga_satuan)} = ${formatRupiah(b.total_harga)}`;
+  let boxes = '';
+  for (let i = 1; i <= b.jumlah_tiket; i++) {
+    boxes += `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" class="acc-check" checked> Tiket ${i}</label>`;
+  }
+  document.getElementById('accChecklist').innerHTML = boxes;
+  updateAccSummary();
+  document.getElementById('accModal').style.display = 'flex';
+}
+
+function closeAccModal() {
+  document.getElementById('accModal').style.display = 'none';
+  accOrder = null;
+}
+
+function updateAccSummary() {
+  if (!accOrder) return;
+  const n = document.querySelectorAll('#accChecklist .acc-check:checked').length;
+  document.getElementById('accSummary').textContent =
+    `${n} dari ${accOrder.jumlah_tiket} tiket \u2192 nominal yang seharusnya diterima: ${formatRupiah(n * accOrder.harga_satuan)}`;
+  const btn = document.getElementById('btnAccConfirm');
+  btn.disabled = n === 0;
+  btn.textContent = n === 0 ? 'ACC' : `ACC ${n} Tiket`;
+}
+
+function setupAccModal() {
+  document.getElementById('accChecklist').addEventListener('change', updateAccSummary);
+  document.getElementById('btnAccCancel').addEventListener('click', closeAccModal);
+  document.getElementById('btnAccViewProof').addEventListener('click', () => { if (accOrder) viewProof(accOrder.id); });
+  document.getElementById('btnAccConfirm').addEventListener('click', async () => {
+    if (!accOrder) return;
+    const n = document.querySelectorAll('#accChecklist .acc-check:checked').length;
+    if (n < 1) return;
+    const btn = document.getElementById('btnAccConfirm');
+    btn.disabled = true;
+    const result = await apiPost('/api/admin/approve-payment', { order_id: accOrder.id, jumlah_acc: n });
+    if (result.success) { closeAccModal(); loadSummary(); loadBookings(); }
+    else { alert(result.message || 'Gagal meng-ACC pembayaran.'); btn.disabled = false; }
+  });
+}
+
+function approvePayment(orderId) {
+  openAccModal(orderId);
 }
 
 async function rejectPayment(orderId) {

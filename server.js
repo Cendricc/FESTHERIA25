@@ -69,6 +69,13 @@ const lookupLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 
 app.use(express.json({ limit: '1mb' }));
+// Semua respons API (harga, batch aktif, status pendaftaran, dll) tidak boleh disimpan cache
+// browser/proxy, supaya perubahan batch & harga dari admin langsung terlihat oleh semua pengguna.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api/booking', bookingLimiter, bookingRoutes);

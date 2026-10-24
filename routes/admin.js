@@ -172,14 +172,39 @@ router.post('/approve-payment', (req, res) => {
       return res.status(400).json({ success: false, message: 'Pemesanan ini sudah lunas.' });
     }
 
-    db.prepare(`
-      UPDATE bookings SET status_pembayaran = 'paid', paid_at = datetime('now','localtime')
-      WHERE id = ?
-    `).run(order_id);
+    // ACC SEBAGIAN: admin boleh meng-ACC kurang dari jumlah yang dipesan (mis. pesan 3 tapi baru
+    // bayar 2). Kalau jumlah_acc tidak dikirim, dianggap ACC semua tiket yang dipesan.
+    const jumlahAcc = req.body.jumlah_acc === undefined ? booking.jumlah_tiket : parseInt(req.body.jumlah_acc, 10);
+    if (!Number.isInteger(jumlahAcc) || jumlahAcc < 1 || jumlahAcc > booking.jumlah_tiket) {
+      return res.status(400).json({ success: false, message: `Jumlah tiket yang di-ACC harus antara 1 - ${booking.jumlah_tiket}.` });
+    }
 
-    const tickets = generateTicketsForBooking(order_id, booking.jumlah_tiket);
+    if (jumlahAcc < booking.jumlah_tiket) {
+      // Pesanan disesuaikan ke jumlah yang dibayar: jumlah tiket & total dihitung ulang,
+      // jumlah awal disimpan di jumlah_dipesan sebagai catatan.
+      db.prepare(`
+        UPDATE bookings
+        SET jumlah_dipesan = COALESCE(jumlah_dipesan, jumlah_tiket),
+            jumlah_tiket = ?, total_harga = harga_satuan * ?,
+            status_pembayaran = 'paid', paid_at = datetime('now','localtime')
+        WHERE id = ?
+      `).run(jumlahAcc, jumlahAcc, order_id);
+    } else {
+      db.prepare(`
+        UPDATE bookings SET status_pembayaran = 'paid', paid_at = datetime('now','localtime')
+        WHERE id = ?
+      `).run(order_id);
+    }
 
-    res.json({ success: true, message: 'Pembayaran di-ACC, tiket berhasil dibuat.', jumlah_tiket: tickets.length });
+    const tickets = generateTicketsForBooking(order_id, jumlahAcc);
+
+    res.json({
+      success: true,
+      message: jumlahAcc < booking.jumlah_tiket
+        ? `Pembayaran di-ACC sebagian: ${jumlahAcc} dari ${booking.jumlah_tiket} tiket diterbitkan.`
+        : 'Pembayaran di-ACC, tiket berhasil dibuat.',
+      jumlah_tiket: tickets.length
+    });
   } catch (err) {
     console.error('Gagal ACC pembayaran:', err);
     res.status(503).json({ success: false, message: 'Server sedang sibuk. Coba klik ACC lagi dalam beberapa detik.' });

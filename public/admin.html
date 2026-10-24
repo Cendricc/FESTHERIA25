@@ -190,6 +190,22 @@
     </div>
   </div>
 
+  <!-- Modal ACC pembayaran (pilih jumlah tiket yang di-ACC) -->
+  <div id="accModal" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+      <h2 style="margin:0 0 4px;">ACC Pembayaran</h2>
+      <div id="accInfo" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></div>
+      <p style="font-size:13px;margin:0 0 8px;">Centang tiket yang <strong>sudah dibayar</strong>. Tiket yang tidak dicentang tidak akan diterbitkan.</p>
+      <div id="accChecklist" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+      <div id="accSummary" style="font-weight:600;margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="action-btn" id="btnAccViewProof">Lihat Bukti</button>
+        <button class="action-btn" id="btnAccConfirm">ACC</button>
+        <button class="action-btn" id="btnAccCancel">Batal</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal lihat bukti pembayaran -->
   <div id="proofModal" class="modal-overlay" style="display:none;">
     <div class="modal-box">

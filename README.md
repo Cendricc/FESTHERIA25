@@ -270,3 +270,8 @@ Sistem sudah diuji tahan menangani ratusan-ribuan request **bersamaan persis** d
 - Pesanan baru muncul di dashboard admin (rekap, statistik, CSV) HANYA setelah pemesan mengunggah bukti pembayaran. Yang masih di halaman pembayaran tidak tampil.
 - "Tiket Terjual" dan rincian per batch langsung menghitung jumlah tiket sejak bukti masuk (tanpa menunggu ACC); ditampilkan juga berapa yang sudah ACC / masih menunggu.
 - "Pendapatan" tetap hanya menghitung yang sudah di-ACC.
+
+## ACC sebagian (mis. pesan 3, bayar 2)
+- Tombol "ACC Pembayaran" membuka jendela berisi centang per tiket. Centang sejumlah tiket yang benar-benar dibayar; nominal yang seharusnya diterima ikut dihitung otomatis. Tombol "Lihat Bukti" ada di jendela yang sama.
+- Hanya sejumlah tiket yang dicentang yang diterbitkan (kode QR). Jumlah tiket & total pesanan disesuaikan; jumlah awal dicatat sebagai "(dipesan N)" di tabel.
+- Tiket terjual, pendapatan, dan tampilan tiket pembeli ikut menyesuaikan. Sisa tiket yang tidak dibayar tidak dibuat/ditagih lagi.
