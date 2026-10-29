@@ -3,8 +3,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   email TEXT NOT NULL,
   nama TEXT NOT NULL,
   no_hp TEXT NOT NULL,
-  prodi TEXT NOT NULL,
-  tingkat INTEGER NOT NULL DEFAULT 1,       -- tingkat/semester: 1-4
+  asal_instansi TEXT NOT NULL,
+  bukti_ktm TEXT,
   jumlah_tiket INTEGER NOT NULL,
   harga_satuan INTEGER NOT NULL,
   total_harga INTEGER NOT NULL,

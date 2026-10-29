@@ -151,6 +151,14 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 th { color: var(--text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
 .table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+/* Kolom "No" menempel di sisi kiri supaya tetap terlihat saat tabel digeser ke samping */
+th.no-col, td.no-col {
+  position: sticky; left: 0; z-index: 2;
+  width: 44px; min-width: 44px; text-align: center;
+  background: var(--surface-alt);
+  box-shadow: 1px 0 0 var(--border);
+  font-weight: 600; color: var(--text-muted);
+}
 
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
 .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }

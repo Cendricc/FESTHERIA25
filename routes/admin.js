@@ -162,6 +162,19 @@ router.get('/proof/:orderId', (req, res) => {
   res.sendFile(filePath);
 });
 
+// GET /api/admin/ktm/:orderId - lihat foto KTM/kartu identitas peserta eksternal (hanya admin yang login)
+router.get('/ktm/:orderId', (req, res) => {
+  const booking = db.prepare('SELECT bukti_ktm FROM bookings WHERE id = ?').get(req.params.orderId);
+  if (!booking || !booking.bukti_ktm) {
+    return res.status(404).json({ success: false, message: 'Foto KTM tidak ditemukan.' });
+  }
+  const filePath = path.join(UPLOAD_DIR, booking.bukti_ktm);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ success: false, message: 'File KTM tidak ditemukan di server.' });
+  }
+  res.sendFile(filePath);
+});
+
 // POST /api/admin/approve-payment - admin meng-ACC bukti pembayaran, status jadi "paid" + tiket dibuat
 router.post('/approve-payment', (req, res) => {
   try {
@@ -208,6 +221,49 @@ router.post('/approve-payment', (req, res) => {
   } catch (err) {
     console.error('Gagal ACC pembayaran:', err);
     res.status(503).json({ success: false, message: 'Server sedang sibuk. Coba klik ACC lagi dalam beberapa detik.' });
+  }
+});
+
+// POST /api/admin/revoke-approval - TARIK KEMBALI ACC (mis. salah klik ACC / perlu ditinjau lagi).
+// Pesanan kembali "pending" (bukti tetap ada), semua kode QR pesanan itu dihapus sehingga tiket lama
+// tidak bisa dipakai masuk dan pembeli tidak bisa lagi melihat tiketnya di Cek Tiket sampai di-ACC ulang.
+// Ditolak kalau salah satu tiketnya sudah dipakai check-in. Jumlah tiket dikembalikan ke jumlah
+// yang awalnya dipesan (kalau tadinya di-ACC sebagian), supaya bisa ditentukan ulang saat ACC lagi.
+router.post('/revoke-approval', (req, res) => {
+  try {
+    const { order_id } = req.body;
+    const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(order_id);
+    if (!booking) return res.status(404).json({ success: false, message: 'Pemesanan tidak ditemukan.' });
+    if (booking.status_pembayaran !== 'paid') {
+      return res.status(400).json({ success: false, message: 'Hanya pesanan yang sudah di-ACC yang bisa ditarik kembali.' });
+    }
+    const sudahHadir = db.prepare('SELECT COUNT(*) AS c FROM tickets WHERE booking_id = ? AND checked_in = 1').get(order_id).c;
+    if (sudahHadir > 0) {
+      return res.status(409).json({ success: false, message: `Tidak bisa ditarik: ${sudahHadir} tiket pesanan ini sudah dipakai check-in.` });
+    }
+
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.prepare('DELETE FROM tickets WHERE booking_id = ?').run(order_id);
+      db.prepare(`
+        UPDATE bookings
+        SET status_pembayaran = 'pending', paid_at = NULL,
+            jumlah_tiket = COALESCE(jumlah_dipesan, jumlah_tiket),
+            total_harga = harga_satuan * COALESCE(jumlah_dipesan, jumlah_tiket),
+            jumlah_dipesan = NULL,
+            ditarik_at = datetime('now','localtime')
+        WHERE id = ?
+      `).run(order_id);
+      db.exec('COMMIT');
+    } catch (txErr) {
+      db.exec('ROLLBACK');
+      throw txErr;
+    }
+
+    res.json({ success: true, message: 'ACC ditarik kembali. Pesanan kembali ke status menunggu verifikasi dan kode tiket lama dinonaktifkan.' });
+  } catch (err) {
+    console.error('Gagal menarik ACC:', err);
+    res.status(503).json({ success: false, message: 'Server sedang sibuk. Coba lagi dalam beberapa detik.' });
   }
 });
 

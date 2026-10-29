@@ -34,17 +34,25 @@ if (!columnNames.includes('batch')) {
   db.exec(`ALTER TABLE bookings ADD COLUMN batch INTEGER NOT NULL DEFAULT 1`);
 }
 
-if (!columnNames.includes('bukti_pembayaran')) {
-  db.exec(`ALTER TABLE bookings ADD COLUMN bukti_pembayaran TEXT`);
-}
-
 // Jumlah tiket yang AWALNYA dipesan - diisi hanya kalau admin meng-ACC sebagian (mis. pesan 3, bayar 2).
 if (!columnNames.includes('jumlah_dipesan')) {
   db.exec(`ALTER TABLE bookings ADD COLUMN jumlah_dipesan INTEGER`);
 }
 
-if (!columnNames.includes('tingkat')) {
-  db.exec(`ALTER TABLE bookings ADD COLUMN tingkat INTEGER NOT NULL DEFAULT 1`);
+// Waktu terakhir ACC "ditarik kembali" oleh admin (untuk ditinjau ulang). Kosong = belum pernah ditarik.
+if (!columnNames.includes('ditarik_at')) {
+  db.exec(`ALTER TABLE bookings ADD COLUMN ditarik_at TEXT`);
+}
+
+if (!columnNames.includes('bukti_pembayaran')) {
+  db.exec(`ALTER TABLE bookings ADD COLUMN bukti_pembayaran TEXT`);
+}
+
+if (!columnNames.includes('asal_instansi')) {
+  db.exec(`ALTER TABLE bookings ADD COLUMN asal_instansi TEXT NOT NULL DEFAULT ''`);
+}
+if (!columnNames.includes('bukti_ktm')) {
+  db.exec(`ALTER TABLE bookings ADD COLUMN bukti_ktm TEXT`);
 }
 
 // Migrasi skema lama (kode_tiket/checked_in pernah ada langsung di tabel bookings)

@@ -176,10 +176,8 @@ function getSortedBookings() {
     waktu_asc: (a, b) => new Date(a.created_at) - new Date(b.created_at),
     nama_asc: (a, b) => a.nama.localeCompare(b.nama, 'id'),
     nama_desc: (a, b) => b.nama.localeCompare(a.nama, 'id'),
-    prodi_asc: (a, b) => a.prodi.localeCompare(b.prodi, 'id'),
-    prodi_desc: (a, b) => b.prodi.localeCompare(a.prodi, 'id'),
-    tingkat_asc: (a, b) => a.tingkat - b.tingkat,
-    tingkat_desc: (a, b) => b.tingkat - a.tingkat
+    instansi_asc: (a, b) => a.asal_instansi.localeCompare(b.asal_instansi, 'id'),
+    instansi_desc: (a, b) => b.asal_instansi.localeCompare(a.asal_instansi, 'id')
   };
 
   sorted.sort(comparators[currentSort] || comparators.waktu_desc);
@@ -189,16 +187,19 @@ function getSortedBookings() {
 function renderTable() {
   const tbody = document.getElementById('bookingTbody');
   if (allBookings.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="15" style="text-align:center;color:var(--text-muted);">Belum ada data.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="16" style="text-align:center;color:var(--text-muted);">Belum ada data.</td></tr>`;
     return;
   }
 
   const sortedBookings = getSortedBookings();
 
-  // Semua data yang berasal dari input pengguna (nama, email, no_hp, prodi) di-escape dulu
+  // Semua data yang berasal dari input pengguna (nama, email, no_hp, asal_instansi) di-escape dulu
   // sebelum dimasukkan ke innerHTML, supaya tidak bisa dipakai untuk menyisipkan script (XSS).
-  tbody.innerHTML = sortedBookings.map((b) => {
+  tbody.innerHTML = sortedBookings.map((b, idx) => {
     const statusClass = b.status_pembayaran === 'paid' ? 'paid' : b.status_pembayaran === 'pending' ? 'pending' : 'failed';
+    const ktmCell = b.bukti_ktm
+      ? `<button class="action-btn" data-action="view-ktm" data-order-id="${escapeHtml(b.id)}">Lihat KTM</button>`
+      : `<span style="color:var(--text-muted);font-size:12px;">Belum ada</span>`;
     const buktiCell = b.bukti_pembayaran
       ? `<button class="action-btn" data-action="view-proof" data-order-id="${escapeHtml(b.id)}">Lihat Bukti</button>`
       : `<span style="color:var(--text-muted);font-size:12px;">Belum ada</span>`;
@@ -212,22 +213,29 @@ function renderTable() {
       `;
     }
 
+    if (b.status_pembayaran === 'paid') {
+      aksiCell = b.tiket_hadir > 0
+        ? `<button class="action-btn" disabled title="Tidak bisa ditarik: sudah ada tiket yang check-in">Tarik ACC</button>`
+        : `<button class="action-btn" data-action="revoke" data-order-id="${escapeHtml(b.id)}">Tarik ACC</button>`;
+    }
+
     const checkinCell = b.status_pembayaran === 'paid' ? `${b.tiket_hadir}/${b.tiket_total} hadir` : '-';
     const waktuAccCell = b.paid_at ? escapeHtml(b.paid_at) : '-';
 
     return `
       <tr>
+        <td class="no-col">${idx + 1}</td>
         <td>${escapeHtml(b.id)}</td>
         <td>${escapeHtml(batchLabel(b.batch))}</td>
         <td>${escapeHtml(b.created_at)}</td>
         <td>${escapeHtml(b.nama)}</td>
         <td>${escapeHtml(b.email)}</td>
         <td>${escapeHtml(b.no_hp)}</td>
-        <td>${escapeHtml(b.prodi)}</td>
-        <td>${escapeHtml(b.tingkat)}</td>
+        <td>${escapeHtml(b.asal_instansi)}</td>
         <td>${escapeHtml(b.jumlah_tiket)}${b.jumlah_dipesan && b.jumlah_dipesan !== b.jumlah_tiket ? ` <span style="font-size:11px;color:var(--text-muted);">(dipesan ${escapeHtml(b.jumlah_dipesan)})</span>` : ''}</td>
         <td>${formatRupiah(b.total_harga)}</td>
-        <td><span class="badge badge-${statusClass}">${escapeHtml(b.status_pembayaran)}</span></td>
+        <td><span class="badge badge-${statusClass}">${escapeHtml(b.status_pembayaran)}</span>${b.status_pembayaran === 'pending' && b.ditarik_at ? `<div style="font-size:11px;color:var(--text-muted);">ACC ditarik ${escapeHtml(b.ditarik_at)}</div>` : ''}</td>
+        <td>${ktmCell}</td>
         <td>${buktiCell}</td>
         <td>${waktuAccCell}</td>
         <td>${checkinCell}</td>
@@ -251,14 +259,18 @@ function setupTableActions() {
 
     const orderId = btn.dataset.orderId;
     if (btn.dataset.action === 'view-proof') viewProof(orderId);
+    else if (btn.dataset.action === 'view-ktm') viewKtm(orderId);
     else if (btn.dataset.action === 'approve') approvePayment(orderId);
+    else if (btn.dataset.action === 'revoke') revokeApproval(orderId);
     else if (btn.dataset.action === 'reject') rejectPayment(orderId);
   });
 
-  // Tabel di tab "Data Gagal/Kedaluwarsa" cuma punya tombol Lihat Bukti (read-only, tidak ada aksi lain)
+  // Tabel di tab "Data Gagal/Kedaluwarsa" cuma punya tombol Lihat Bukti/KTM (read-only, tidak ada aksi lain)
   document.getElementById('failedTbody').addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-action="view-proof"]');
-    if (btn) viewProof(btn.dataset.orderId);
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    if (btn.dataset.action === 'view-proof') viewProof(btn.dataset.orderId);
+    else if (btn.dataset.action === 'view-ktm') viewKtm(btn.dataset.orderId);
   });
 }
 
@@ -315,6 +327,13 @@ function approvePayment(orderId) {
   openAccModal(orderId);
 }
 
+async function revokeApproval(orderId) {
+  if (!confirm(`TARIK KEMBALI ACC untuk pesanan ${orderId}?\n\n- Kode tiket pembeli dinonaktifkan (tidak bisa dipakai masuk).\n- Pesanan kembali ke "Menunggu Verifikasi" untuk ditinjau ulang.\n- Saat di-ACC lagi, kode tiket baru akan diterbitkan.`)) return;
+  const result = await apiPost('/api/admin/revoke-approval', { order_id: orderId });
+  if (result.success) { loadSummary(); loadBookings(); }
+  else alert(result.message || 'Gagal menarik ACC.');
+}
+
 async function rejectPayment(orderId) {
   if (!confirm(`Tandai pesanan ${orderId} sebagai GAGAL? Pesanan akan dipindah ke tab "Data Gagal/Kedaluwarsa" dan tidak lagi muncul di rekap utama. Emailnya otomatis bisa dipakai pesan ulang.`)) return;
   const result = await apiPost('/api/admin/reject-payment', { order_id: orderId });
@@ -322,7 +341,7 @@ async function rejectPayment(orderId) {
   else alert(result.message || 'Gagal menandai pesanan.');
 }
 
-// ===== MODAL LIHAT BUKTI PEMBAYARAN =====
+// ===== MODAL LIHAT BUKTI PEMBAYARAN / KTM =====
 function setupModal() {
   document.getElementById('btnCloseModal').addEventListener('click', closeModal);
   document.getElementById('proofModal').addEventListener('click', (e) => {
@@ -335,24 +354,32 @@ function closeModal() {
   document.getElementById('modalImageArea').innerHTML = '';
 }
 
-async function viewProof(orderId) {
+async function viewImageInModal(url, notFoundMessage) {
   const modal = document.getElementById('proofModal');
   const area = document.getElementById('modalImageArea');
   area.innerHTML = `<div class="center-loading"><span class="spinner"></span> Memuat gambar...</div>`;
   modal.style.display = 'flex';
 
   try {
-    const res = await fetch(`/api/admin/proof/${encodeURIComponent(orderId)}`, { headers: { Authorization: authHeader } });
+    const res = await fetch(url, { headers: { Authorization: authHeader } });
     if (!res.ok) {
-      area.innerHTML = `<div class="alert alert-error">Gagal memuat bukti pembayaran.</div>`;
+      area.innerHTML = `<div class="alert alert-error">${escapeHtml(notFoundMessage)}</div>`;
       return;
     }
     const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    area.innerHTML = `<img src="${url}" style="max-width:100%;max-height:70vh;border-radius:10px;">`;
+    const objectUrl = URL.createObjectURL(blob);
+    area.innerHTML = `<img src="${objectUrl}" style="max-width:100%;max-height:70vh;border-radius:10px;">`;
   } catch (err) {
-    area.innerHTML = `<div class="alert alert-error">Gagal memuat bukti pembayaran.</div>`;
+    area.innerHTML = `<div class="alert alert-error">${escapeHtml(notFoundMessage)}</div>`;
   }
+}
+
+function viewProof(orderId) {
+  viewImageInModal(`/api/admin/proof/${encodeURIComponent(orderId)}`, 'Gagal memuat bukti pembayaran.');
+}
+
+function viewKtm(orderId) {
+  viewImageInModal(`/api/admin/ktm/${encodeURIComponent(orderId)}`, 'Gagal memuat foto KTM.');
 }
 
 function setupFilters() {
@@ -390,10 +417,10 @@ function setupTabs() {
 
 function exportCsv() {
   if (allBookings.length === 0) return alert('Tidak ada data untuk diekspor.');
-  const headers = ['Order ID', 'Batch', 'Nama', 'Email', 'No HP', 'Prodi', 'Tingkat', 'Jumlah Tiket', 'Total', 'Status', 'Ada Bukti', 'Waktu ACC', 'Check-in', 'Waktu Pesan'];
+  const headers = ['Order ID', 'Batch', 'Nama', 'Email', 'No HP', 'Asal Instansi', 'Jumlah Tiket', 'Total', 'Status', 'Ada KTM', 'Ada Bukti Bayar', 'Waktu ACC', 'Check-in', 'Waktu Pesan'];
   const rows = getSortedBookings().map((b) => [
-    b.id, batchLabel(b.batch), b.nama, b.email, b.no_hp, b.prodi, b.tingkat, b.jumlah_tiket, b.total_harga,
-    b.status_pembayaran, b.bukti_pembayaran ? 'Ya' : 'Tidak', b.paid_at || '-', `${b.tiket_hadir}/${b.tiket_total}`, b.created_at
+    b.id, batchLabel(b.batch), b.nama, b.email, b.no_hp, b.asal_instansi, b.jumlah_tiket, b.total_harga,
+    b.status_pembayaran, b.bukti_ktm ? 'Ya' : 'Tidak', b.bukti_pembayaran ? 'Ya' : 'Tidak', b.paid_at || '-', `${b.tiket_hadir}/${b.tiket_total}`, b.created_at
   ]);
   const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -424,26 +451,30 @@ async function loadFailedBookings() {
 function renderFailedTable() {
   const tbody = document.getElementById('failedTbody');
   if (failedBookings.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;color:var(--text-muted);">Belum ada data gagal/kedaluwarsa.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;color:var(--text-muted);">Belum ada data gagal/kedaluwarsa.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = failedBookings.map((b) => {
+  tbody.innerHTML = failedBookings.map((b, idx) => {
+    const ktmCell = b.bukti_ktm
+      ? `<button class="action-btn" data-action="view-ktm" data-order-id="${escapeHtml(b.id)}">Lihat KTM</button>`
+      : `<span style="color:var(--text-muted);font-size:12px;">Tidak ada</span>`;
     const buktiCell = b.bukti_pembayaran
       ? `<button class="action-btn" data-action="view-proof" data-order-id="${escapeHtml(b.id)}">Lihat Bukti</button>`
       : `<span style="color:var(--text-muted);font-size:12px;">Tidak ada</span>`;
 
     return `
       <tr>
+        <td class="no-col">${idx + 1}</td>
         <td>${escapeHtml(b.id)}</td>
         <td>${escapeHtml(batchLabel(b.batch))}</td>
         <td>${escapeHtml(b.nama)}</td>
         <td>${escapeHtml(b.email)}</td>
         <td>${escapeHtml(b.no_hp)}</td>
-        <td>${escapeHtml(b.prodi)}</td>
-        <td>${escapeHtml(b.tingkat)}</td>
+        <td>${escapeHtml(b.asal_instansi)}</td>
         <td>${escapeHtml(b.jumlah_tiket)}</td>
         <td>${formatRupiah(b.total_harga)}</td>
+        <td>${ktmCell}</td>
         <td>${buktiCell}</td>
         <td>${escapeHtml(b.created_at)}</td>
       </tr>
@@ -453,10 +484,10 @@ function renderFailedTable() {
 
 function exportCsvGagal() {
   if (failedBookings.length === 0) return alert('Tidak ada data gagal untuk diekspor.');
-  const headers = ['Order ID', 'Batch', 'Nama', 'Email', 'No HP', 'Prodi', 'Tingkat', 'Jumlah Tiket', 'Total', 'Ada Bukti', 'Waktu Pesan'];
+  const headers = ['Order ID', 'Batch', 'Nama', 'Email', 'No HP', 'Asal Instansi', 'Jumlah Tiket', 'Total', 'Ada KTM', 'Ada Bukti Bayar', 'Waktu Pesan'];
   const rows = failedBookings.map((b) => [
-    b.id, batchLabel(b.batch), b.nama, b.email, b.no_hp, b.prodi, b.tingkat, b.jumlah_tiket, b.total_harga,
-    b.bukti_pembayaran ? 'Ya' : 'Tidak', b.created_at
+    b.id, batchLabel(b.batch), b.nama, b.email, b.no_hp, b.asal_instansi, b.jumlah_tiket, b.total_harga,
+    b.bukti_ktm ? 'Ya' : 'Tidak', b.bukti_pembayaran ? 'Ya' : 'Tidak', b.created_at
   ]);
   const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
