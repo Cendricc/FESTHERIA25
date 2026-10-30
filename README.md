@@ -1,34 +1,32 @@
-# Sistem Pemesanan Tiket Event untuk Peserta Eksternal (QR Code + Verifikasi Pembayaran Manual)
+# Sistem Pemesanan Tiket Event (QR Code + Verifikasi Pembayaran Manual)
 
-Ini adalah **project terpisah** dari sistem tiket internal (Festheria) — dibuat khusus untuk peserta dari luar kampus. Alurnya sama persis dengan versi internal (pembayaran, ACC admin, QR tiket, batch, cetak PDF, tema jungle), bedanya cuma di data yang diminta saat pendaftaran: peserta eksternal mengisi **Asal Instansi** dan mengunggah **foto KTM/kartu identitas**, bukan Prodi/Tingkat.
-
-Alur: **Dashboard → Isi Data + Upload KTM → Transfer Manual/QRIS + Upload Bukti Bayar → Cek Status & Unduh Tiket (Email + Booking ID)**, plus dashboard panitia untuk rekap data, verifikasi KTM & bukti pembayaran, dan check-in.
+Alur: **Dashboard → Isi Data Pemesan → Transfer Manual/QRIS + Upload Bukti → Bukti Terkirim → Cek Status & Unduh Tiket (Email + Booking ID)**, plus dashboard panitia untuk rekap data, verifikasi bukti pembayaran, dan check-in.
 
 ## Struktur Folder
 ```
-event-ticket-eksternal/
+event-ticket-system/
 ├── server.js              # entry point Express (helmet, rate limiting, dll)
 ├── .env.example           # contoh konfigurasi (salin jadi .env)
-├── .gitignore              # supaya .env, database, & file upload tidak ter-upload ke git
+├── .gitignore              # supaya .env, database, & bukti pembayaran tidak ter-upload ke git
 ├── db/
 │   ├── schema.sql          # struktur tabel (bookings, tickets, settings)
-│   └── database.js         # koneksi SQLite (mode WAL) + migrasi otomatis
+│   └── database.js         # koneksi SQLite + migrasi otomatis
 ├── services/
 │   ├── qrService.js        # generate kode tiket (per lembar) + QR code
-│   ├── settingsService.js  # baca/ubah pengaturan batch, harga, & buka-tutup pendaftaran
-│   ├── storagePaths.js     # lokasi penyimpanan database & file upload (aman untuk deploy)
-│   └── imageUpload.js      # validasi & konfigurasi upload gambar (dipakai KTM & bukti bayar)
+│   ├── bookingExpiry.js    # logic batas waktu 15 menit
+│   ├── settingsService.js  # baca/ubah pengaturan batch & buka-tutup pendaftaran
+│   └── emailService.js     # kirim email pengingat pembayaran (SMTP / mode simulasi)
 ├── routes/
-│   ├── booking.js           # POST/GET data pemesanan (termasuk upload KTM)
-│   ├── payment.js           # upload bukti bayar, lookup status, ambil tiket (email-gated)
-│   └── admin.js              # rekap data, lihat KTM/bukti, ACC, tolak, check-in, kontrol batch
+│   ├── booking.js           # POST/GET data pemesanan
+│   ├── payment.js           # upload bukti, lookup status, ambil tiket (email-gated)
+│   └── admin.js              # rekap data, lihat bukti, ACC, reminder, check-in, kontrol batch
 ├── scripts/
 │   └── reset-db.js          # utilitas mengosongkan database (npm run reset-db)
-├── uploads/proofs/          # penyimpanan foto KTM & bukti pembayaran (privat, hanya admin yang bisa lihat)
+├── uploads/proofs/          # penyimpanan gambar bukti pembayaran (privat, hanya admin yang bisa lihat)
 └── public/
     ├── index.html            # dashboard + tombol "Pesan Sekarang"
-    ├── booking.html           # form data pemesan + upload KTM
-    ├── payment.html           # info rekening/QRIS + upload bukti bayar
+    ├── booking.html           # form data pemesan
+    ├── payment.html           # info rekening/QRIS + upload bukti
     ├── cek-tiket.html         # cek status & unduh tiket (input Email + Booking ID)
     ├── admin.html             # dashboard panitia
     ├── images/qris.jpg        # GANTI dengan gambar QRIS asli kamu di sini
@@ -187,19 +185,17 @@ Sekarang sistem bisa membedakan dua kondisi berbeda:
 Tab Rekap sekarang menampilkan kartu **"Pendaftar per Batch"** yang menunjukkan jumlah pendaftar di tiap batch (1/2/3/OTS) secara real-time, termasuk rincian berapa yang sudah lunas dan berapa yang masih pending — otomatis ter-update tiap 15 detik bersamaan dengan rekap utama.
 
 
-## Asal Instansi & Upload KTM (Beda dari Versi Internal)
+## Prodi & Tingkat (Dropdown)
 
-Ini yang jadi pembeda utama project ini dari sistem tiket internal (Festheria):
-- Form pemesanan **tidak** pakai dropdown Prodi/Tingkat — diganti field bebas **"Asal Instansi"** (nama sekolah/kampus/perusahaan/organisasi asal peserta)
-- Peserta **wajib mengunggah foto KTM/kartu identitas** langsung di halaman isi data (bukan di halaman pembayaran) — ini jadi bukti kuat identitas peserta eksternal
-- Validasi upload KTM sama persis ketatnya dengan bukti pembayaran: format harus JPG/PNG/WEBP, maksimal 5MB, dan isi filenya diverifikasi benar-benar gambar (bukan cuma percaya label dari browser)
-- Panitia bisa lihat foto KTM lewat tombol **"Lihat KTM"** di dashboard admin, terpisah dari tombol **"Lihat Bukti"** (bukti pembayaran) — supaya bisa mengecek identitas dan bukti transfer sebagai dua hal terpisah sebelum meng-ACC
+Form pemesanan memakai dropdown untuk Prodi dan Tingkat (bukan lagi satu kolom teks bebas):
+- **Tingkat**: 1 - 4
+- **Prodi**: daftar tetap 21 program studi, didefinisikan di `services/prodiList.js`
 
-Kalau nanti perlu tambah/ubah field lain khusus peserta eksternal, edit `routes/booking.js` (validasi) dan `public/booking.html` + `public/js/booking.js` (form-nya).
+Daftar ini jadi **satu-satunya sumber kebenaran** — dipakai baik untuk mengisi dropdown di form (lewat endpoint `GET /api/prodi-list`) maupun untuk validasi di server saat pesanan masuk. Jadi kalau kamu perlu menambah/mengubah/menghapus prodi, cukup edit array `PRODI_LIST` di file itu satu kali, otomatis konsisten di form maupun validasi.
 
 ## Fitur Sort di Rekap Admin
 
-Tabel rekap admin bisa diurutkan berdasarkan Nama (A-Z/Z-A), Asal Instansi (A-Z/Z-A), atau Waktu Pemesanan (terbaru/terlama), lewat dropdown "Urutkan Berdasarkan" di atas tabel.
+Tabel rekap admin bisa diurutkan berdasarkan Nama (A-Z/Z-A), Prodi (A-Z/Z-A), Tingkat, atau Waktu Pemesanan (terbaru/terlama), lewat dropdown "Urutkan Berdasarkan" di atas tabel.
 
 **Catatan teknis (biar kamu tenang):** fitur ini murni mengatur *urutan tampilan baris* di layar — hanya menata ulang array data yang sudah diambil dari server sebelum ditampilkan, sama sekali tidak mengubah/menulis apapun ke database. Ganti-ganti urutan sort sesuka hati tidak akan pernah merusak atau mengubah data pemesanan yang sebenarnya.
 
@@ -209,7 +205,7 @@ Tabel rekap juga menampilkan kapan tiap pesanan di-ACC oleh admin (kolom **Waktu
 
 ## Tema Visual "Jungle"
 
-Seluruh halaman (pemesanan, pembayaran, cek tiket, dashboard admin) memakai palet warna yang sama dengan Festheria'25 (`#534332`, `#394032`, `#454F2D`, `#797F3E`, `#9F7E4A`), plus sentuhan motif daun (tekstur latar halus di seluruh halaman, watermark daun di pojok kartu tiket, ikon daun di pembatas antar-bagian) supaya nuansa hutan/jungle terasa tanpa mengorbankan keterbacaan teks. UI/UX-nya sengaja dibuat identik dengan sistem internal supaya pengalaman peserta konsisten walau mendaftar lewat jalur yang berbeda.
+Seluruh halaman (pemesanan, pembayaran, cek tiket, dashboard admin) memakai palet warna dari poster Festheria'25 (`#534332`, `#394032`, `#454F2D`, `#797F3E`, `#9F7E4A`), plus sentuhan motif daun (tekstur latar halus di seluruh halaman, watermark daun di pojok kartu tiket, ikon daun di pembatas antar-bagian) supaya nuansa hutan/jungle terasa tanpa mengorbankan keterbacaan teks.
 
 ## Format Cetak Tiket (PDF/A4)
 
@@ -217,8 +213,8 @@ Tombol **"Cetak / Simpan sebagai PDF"** di halaman Cek Tiket sekarang menghasilk
 - **1 halaman A4 = 1 tiket** — kalau pesanan punya 3 tiket, hasil cetak/PDF-nya otomatis jadi 3 halaman terpisah, masing-masing dengan kode QR yang berbeda
 - **Nama pemesan** di pojok kiri atas tiap halaman
 - **Kode QR + kode unik tiket** di tengah halaman, ukurannya pas tidak melebar
-- Info tambahan (Order ID, Asal Instansi, Batch) di bagian bawah
-- Latar dibuat **putih** (bukan gelap seperti tampilan di layar) supaya hemat tinta kalau dicetak fisik, tapi nuansa jungle tetap kerasa lewat warna aksen hijau/emas dan ikon daun — sudah saya uji render sungguhan (generate PDF asli) dan hasilnya pas di ukuran A4 standar
+- Info tambahan (Order ID, Prodi, Tingkat, Batch) di bagian bawah
+- Latar dibuat **putih** (bukan gelap seperti tampilan di layar) supaya hemat tinta kalau dicetak fisik, tapi nuansa jungle tetap kerasa lewat warna aksen hijau/emas dan ikon daun — sudah saya uji render sungguhan (screenshot + generate PDF asli) dan hasilnya pas di ukuran A4 standar
 
 Cara pakainya sama seperti sebelumnya: klik tombol itu, lalu di dialog print browser pilih **"Save as PDF"** (atau print fisik langsung kalau printer sudah terhubung).
 
@@ -260,8 +256,9 @@ Sistem sudah diuji tahan menangani ratusan-ribuan request **bersamaan persis** d
 
 
 ## Pemesan yang kembali sebelum kirim bukti
-- Email sudah terdaftar, status `pending`, belum ada bukti, dan **No HP sama** → dilanjutkan ke halaman pembayaran pesanan yang sama.
-- No HP beda → ditolak. Bukti sudah dikirim / lunas → diarahkan ke "Cek Tiket".
+- Email sudah terdaftar, status `pending`, belum ada bukti, dan **No HP sama** → otomatis dilanjutkan ke halaman pembayaran pesanan yang sama (tidak ada pesanan dobel).
+- No HP berbeda → ditolak (mencegah orang membajak pesanan dengan menebak email).
+- Bukti sudah dikirim / sudah lunas → diarahkan ke halaman "Cek Tiket".
 - Di "Cek Tiket", pesanan pending tanpa bukti punya tombol "Upload Bukti Pembayaran".
 
 ## Cek Tiket pakai Email + Nomor HP
@@ -283,3 +280,7 @@ Sistem sudah diuji tahan menangani ratusan-ribuan request **bersamaan persis** d
 - Pesanan yang sudah ACC punya tombol "Tarik ACC" (dengan konfirmasi). Pesanan kembali ke "Menunggu Verifikasi" (bukti tetap ada), kode QR lama dihapus sehingga tidak bisa dipakai masuk, dan pembeli tidak bisa lagi melihat tiketnya di Cek Tiket sampai di-ACC ulang. ACC ulang menerbitkan kode baru.
 - Tidak bisa ditarik kalau sudah ada tiket pesanan itu yang check-in. Jumlah tiket kembali ke jumlah yang awalnya dipesan (jika tadinya ACC sebagian).
 - Tabel dashboard punya kolom "No" yang menempel di kiri saat tabel digeser ke samping.
+
+## Suara & jeda saat scan
+- Scan berhasil: bip naik (+ getar di HP). Gagal / kode tidak valid / sudah dipakai: bunyi rendah panjang.
+- QR yang sama yang masih di depan kamera diabaikan (tanpa notifikasi "sudah di-scan") sampai 4 detik setelah terakhir terlihat. Input manual tidak terkena jeda ini.

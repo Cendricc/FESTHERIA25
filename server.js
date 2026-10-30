@@ -8,6 +8,7 @@ const bookingRoutes = require('./routes/booking');
 const paymentRoutes = require('./routes/payment');
 const adminRoutes = require('./routes/admin');
 const { getSettings } = require('./services/settingsService');
+const { PRODI_LIST, TINGKAT_LIST } = require('./services/prodiList');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -101,6 +102,12 @@ app.get('/api/settings', (req, res) => {
     current_batch: settings.current_batch,
     ticket_price: settings[`price_batch_${settings.current_batch}`]
   });
+});
+
+// Daftar prodi & tingkat - dipakai untuk mengisi dropdown di form pemesanan.
+// Diambil dari satu sumber yang sama dengan yang dipakai validasi backend, supaya selalu sinkron.
+app.get('/api/prodi-list', (req, res) => {
+  res.json({ prodi: PRODI_LIST, tingkat: TINGKAT_LIST });
 });
 
 app.listen(PORT, () => {

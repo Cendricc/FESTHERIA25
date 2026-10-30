@@ -161,7 +161,8 @@ async function renderTicket(orderId, email) {
 
       <table class="print-info-table">
         <tr><td>Order ID</td><td>${escapeHtml(b.id)}</td></tr>
-        <tr><td>Asal Instansi</td><td>${escapeHtml(b.asal_instansi)}</td></tr>
+        <tr><td>Prodi</td><td>${escapeHtml(b.prodi)}</td></tr>
+        <tr><td>Tingkat</td><td>${escapeHtml(b.tingkat)}</td></tr>
         <tr><td>Batch</td><td>${escapeHtml(batchLabelPrint(b.batch))}</td></tr>
       </table>
 
@@ -177,7 +178,8 @@ async function renderTicket(orderId, email) {
     <div class="ticket">
       <div class="row"><span class="k">Nama</span><span class="v">${escapeHtml(b.nama)}</span></div>
       <div class="row"><span class="k">Email</span><span class="v">${escapeHtml(b.email)}</span></div>
-      <div class="row"><span class="k">Asal Instansi</span><span class="v">${escapeHtml(b.asal_instansi)}</span></div>
+      <div class="row"><span class="k">Prodi</span><span class="v">${escapeHtml(b.prodi)}</span></div>
+      <div class="row"><span class="k">Tingkat</span><span class="v">${escapeHtml(b.tingkat)}</span></div>
       <div class="row"><span class="k">Jumlah tiket</span><span class="v">${escapeHtml(b.jumlah_tiket)}</span></div>
       <div class="row total"><span class="k">Total dibayar</span><span class="v">${formatRupiah(b.total_harga)}</span></div>
     </div>

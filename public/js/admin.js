@@ -176,8 +176,10 @@ function getSortedBookings() {
     waktu_asc: (a, b) => new Date(a.created_at) - new Date(b.created_at),
     nama_asc: (a, b) => a.nama.localeCompare(b.nama, 'id'),
     nama_desc: (a, b) => b.nama.localeCompare(a.nama, 'id'),
-    instansi_asc: (a, b) => a.asal_instansi.localeCompare(b.asal_instansi, 'id'),
-    instansi_desc: (a, b) => b.asal_instansi.localeCompare(a.asal_instansi, 'id')
+    prodi_asc: (a, b) => a.prodi.localeCompare(b.prodi, 'id'),
+    prodi_desc: (a, b) => b.prodi.localeCompare(a.prodi, 'id'),
+    tingkat_asc: (a, b) => a.tingkat - b.tingkat,
+    tingkat_desc: (a, b) => b.tingkat - a.tingkat
   };
 
   sorted.sort(comparators[currentSort] || comparators.waktu_desc);
@@ -193,13 +195,10 @@ function renderTable() {
 
   const sortedBookings = getSortedBookings();
 
-  // Semua data yang berasal dari input pengguna (nama, email, no_hp, asal_instansi) di-escape dulu
+  // Semua data yang berasal dari input pengguna (nama, email, no_hp, prodi) di-escape dulu
   // sebelum dimasukkan ke innerHTML, supaya tidak bisa dipakai untuk menyisipkan script (XSS).
   tbody.innerHTML = sortedBookings.map((b, idx) => {
     const statusClass = b.status_pembayaran === 'paid' ? 'paid' : b.status_pembayaran === 'pending' ? 'pending' : 'failed';
-    const ktmCell = b.bukti_ktm
-      ? `<button class="action-btn" data-action="view-ktm" data-order-id="${escapeHtml(b.id)}">Lihat KTM</button>`
-      : `<span style="color:var(--text-muted);font-size:12px;">Belum ada</span>`;
     const buktiCell = b.bukti_pembayaran
       ? `<button class="action-btn" data-action="view-proof" data-order-id="${escapeHtml(b.id)}">Lihat Bukti</button>`
       : `<span style="color:var(--text-muted);font-size:12px;">Belum ada</span>`;
@@ -231,11 +230,11 @@ function renderTable() {
         <td>${escapeHtml(b.nama)}</td>
         <td>${escapeHtml(b.email)}</td>
         <td>${escapeHtml(b.no_hp)}</td>
-        <td>${escapeHtml(b.asal_instansi)}</td>
+        <td>${escapeHtml(b.prodi)}</td>
+        <td>${escapeHtml(b.tingkat)}</td>
         <td>${escapeHtml(b.jumlah_tiket)}${b.jumlah_dipesan && b.jumlah_dipesan !== b.jumlah_tiket ? ` <span style="font-size:11px;color:var(--text-muted);">(dipesan ${escapeHtml(b.jumlah_dipesan)})</span>` : ''}</td>
         <td>${formatRupiah(b.total_harga)}</td>
         <td><span class="badge badge-${statusClass}">${escapeHtml(b.status_pembayaran)}</span>${b.status_pembayaran === 'pending' && b.ditarik_at ? `<div style="font-size:11px;color:var(--text-muted);">ACC ditarik ${escapeHtml(b.ditarik_at)}</div>` : ''}</td>
-        <td>${ktmCell}</td>
         <td>${buktiCell}</td>
         <td>${waktuAccCell}</td>
         <td>${checkinCell}</td>
@@ -259,18 +258,15 @@ function setupTableActions() {
 
     const orderId = btn.dataset.orderId;
     if (btn.dataset.action === 'view-proof') viewProof(orderId);
-    else if (btn.dataset.action === 'view-ktm') viewKtm(orderId);
     else if (btn.dataset.action === 'approve') approvePayment(orderId);
     else if (btn.dataset.action === 'revoke') revokeApproval(orderId);
     else if (btn.dataset.action === 'reject') rejectPayment(orderId);
   });
 
-  // Tabel di tab "Data Gagal/Kedaluwarsa" cuma punya tombol Lihat Bukti/KTM (read-only, tidak ada aksi lain)
+  // Tabel di tab "Data Gagal/Kedaluwarsa" cuma punya tombol Lihat Bukti (read-only, tidak ada aksi lain)
   document.getElementById('failedTbody').addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-action]');
-    if (!btn) return;
-    if (btn.dataset.action === 'view-proof') viewProof(btn.dataset.orderId);
-    else if (btn.dataset.action === 'view-ktm') viewKtm(btn.dataset.orderId);
+    const btn = e.target.closest('button[data-action="view-proof"]');
+    if (btn) viewProof(btn.dataset.orderId);
   });
 }
 
@@ -341,7 +337,7 @@ async function rejectPayment(orderId) {
   else alert(result.message || 'Gagal menandai pesanan.');
 }
 
-// ===== MODAL LIHAT BUKTI PEMBAYARAN / KTM =====
+// ===== MODAL LIHAT BUKTI PEMBAYARAN =====
 function setupModal() {
   document.getElementById('btnCloseModal').addEventListener('click', closeModal);
   document.getElementById('proofModal').addEventListener('click', (e) => {
@@ -354,32 +350,24 @@ function closeModal() {
   document.getElementById('modalImageArea').innerHTML = '';
 }
 
-async function viewImageInModal(url, notFoundMessage) {
+async function viewProof(orderId) {
   const modal = document.getElementById('proofModal');
   const area = document.getElementById('modalImageArea');
   area.innerHTML = `<div class="center-loading"><span class="spinner"></span> Memuat gambar...</div>`;
   modal.style.display = 'flex';
 
   try {
-    const res = await fetch(url, { headers: { Authorization: authHeader } });
+    const res = await fetch(`/api/admin/proof/${encodeURIComponent(orderId)}`, { headers: { Authorization: authHeader } });
     if (!res.ok) {
-      area.innerHTML = `<div class="alert alert-error">${escapeHtml(notFoundMessage)}</div>`;
+      area.innerHTML = `<div class="alert alert-error">Gagal memuat bukti pembayaran.</div>`;
       return;
     }
     const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    area.innerHTML = `<img src="${objectUrl}" style="max-width:100%;max-height:70vh;border-radius:10px;">`;
+    const url = URL.createObjectURL(blob);
+    area.innerHTML = `<img src="${url}" style="max-width:100%;max-height:70vh;border-radius:10px;">`;
   } catch (err) {
-    area.innerHTML = `<div class="alert alert-error">${escapeHtml(notFoundMessage)}</div>`;
+    area.innerHTML = `<div class="alert alert-error">Gagal memuat bukti pembayaran.</div>`;
   }
-}
-
-function viewProof(orderId) {
-  viewImageInModal(`/api/admin/proof/${encodeURIComponent(orderId)}`, 'Gagal memuat bukti pembayaran.');
-}
-
-function viewKtm(orderId) {
-  viewImageInModal(`/api/admin/ktm/${encodeURIComponent(orderId)}`, 'Gagal memuat foto KTM.');
 }
 
 function setupFilters() {
@@ -417,10 +405,10 @@ function setupTabs() {
 
 function exportCsv() {
   if (allBookings.length === 0) return alert('Tidak ada data untuk diekspor.');
-  const headers = ['Order ID', 'Batch', 'Nama', 'Email', 'No HP', 'Asal Instansi', 'Jumlah Tiket', 'Total', 'Status', 'Ada KTM', 'Ada Bukti Bayar', 'Waktu ACC', 'Check-in', 'Waktu Pesan'];
+  const headers = ['Order ID', 'Batch', 'Nama', 'Email', 'No HP', 'Prodi', 'Tingkat', 'Jumlah Tiket', 'Total', 'Status', 'Ada Bukti', 'Waktu ACC', 'Check-in', 'Waktu Pesan'];
   const rows = getSortedBookings().map((b) => [
-    b.id, batchLabel(b.batch), b.nama, b.email, b.no_hp, b.asal_instansi, b.jumlah_tiket, b.total_harga,
-    b.status_pembayaran, b.bukti_ktm ? 'Ya' : 'Tidak', b.bukti_pembayaran ? 'Ya' : 'Tidak', b.paid_at || '-', `${b.tiket_hadir}/${b.tiket_total}`, b.created_at
+    b.id, batchLabel(b.batch), b.nama, b.email, b.no_hp, b.prodi, b.tingkat, b.jumlah_tiket, b.total_harga,
+    b.status_pembayaran, b.bukti_pembayaran ? 'Ya' : 'Tidak', b.paid_at || '-', `${b.tiket_hadir}/${b.tiket_total}`, b.created_at
   ]);
   const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -456,9 +444,6 @@ function renderFailedTable() {
   }
 
   tbody.innerHTML = failedBookings.map((b, idx) => {
-    const ktmCell = b.bukti_ktm
-      ? `<button class="action-btn" data-action="view-ktm" data-order-id="${escapeHtml(b.id)}">Lihat KTM</button>`
-      : `<span style="color:var(--text-muted);font-size:12px;">Tidak ada</span>`;
     const buktiCell = b.bukti_pembayaran
       ? `<button class="action-btn" data-action="view-proof" data-order-id="${escapeHtml(b.id)}">Lihat Bukti</button>`
       : `<span style="color:var(--text-muted);font-size:12px;">Tidak ada</span>`;
@@ -471,10 +456,10 @@ function renderFailedTable() {
         <td>${escapeHtml(b.nama)}</td>
         <td>${escapeHtml(b.email)}</td>
         <td>${escapeHtml(b.no_hp)}</td>
-        <td>${escapeHtml(b.asal_instansi)}</td>
+        <td>${escapeHtml(b.prodi)}</td>
+        <td>${escapeHtml(b.tingkat)}</td>
         <td>${escapeHtml(b.jumlah_tiket)}</td>
         <td>${formatRupiah(b.total_harga)}</td>
-        <td>${ktmCell}</td>
         <td>${buktiCell}</td>
         <td>${escapeHtml(b.created_at)}</td>
       </tr>
@@ -484,10 +469,10 @@ function renderFailedTable() {
 
 function exportCsvGagal() {
   if (failedBookings.length === 0) return alert('Tidak ada data gagal untuk diekspor.');
-  const headers = ['Order ID', 'Batch', 'Nama', 'Email', 'No HP', 'Asal Instansi', 'Jumlah Tiket', 'Total', 'Ada KTM', 'Ada Bukti Bayar', 'Waktu Pesan'];
+  const headers = ['Order ID', 'Batch', 'Nama', 'Email', 'No HP', 'Prodi', 'Tingkat', 'Jumlah Tiket', 'Total', 'Ada Bukti', 'Waktu Pesan'];
   const rows = failedBookings.map((b) => [
-    b.id, batchLabel(b.batch), b.nama, b.email, b.no_hp, b.asal_instansi, b.jumlah_tiket, b.total_harga,
-    b.bukti_ktm ? 'Ya' : 'Tidak', b.bukti_pembayaran ? 'Ya' : 'Tidak', b.created_at
+    b.id, batchLabel(b.batch), b.nama, b.email, b.no_hp, b.prodi, b.tingkat, b.jumlah_tiket, b.total_harga,
+    b.bukti_pembayaran ? 'Ya' : 'Tidak', b.created_at
   ]);
   const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -618,7 +603,7 @@ async function startWithCameraId(cameraId) {
   await html5QrCodeInstance.start(
     cameraId,
     { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
-    (decodedText) => handleCheckIn(decodedText),
+    (decodedText) => handleCameraScan(decodedText),
     () => { /* dipanggil terus-menerus tiap frame yang belum ketemu QR - ini normal, bukan error */ }
   );
 }
@@ -633,6 +618,68 @@ function renderCameraPicker(cameras) {
   document.getElementById('reader').insertAdjacentElement('beforebegin', picker);
 }
 
+// ===== SUARA & JEDA SCAN =====
+// Nada dibuat langsung oleh browser (Web Audio) - tidak butuh file suara. Browser (terutama iPhone)
+// baru mengizinkan bunyi setelah ada sentuhan pengguna; karena petugas pasti menekan tab/tombol dulu,
+// AudioContext dibuat/di-resume saat bunyi pertama diminta.
+let audioCtx = null;
+
+function playTone(freq, startAt, duration, type = 'sine', volume = 0.35) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.0001, audioCtx.currentTime + startAt);
+  gain.gain.exponentialRampToValueAtTime(volume, audioCtx.currentTime + startAt + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + startAt + duration);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(audioCtx.currentTime + startAt);
+  osc.stop(audioCtx.currentTime + startAt + duration + 0.02);
+}
+
+function playScanSound(ok) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!audioCtx) audioCtx = new AC();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (ok) {
+      playTone(880, 0, 0.12);       // bip naik: berhasil
+      playTone(1320, 0.13, 0.18);
+      if (navigator.vibrate) navigator.vibrate(80);
+    } else {
+      playTone(220, 0, 0.35, 'square', 0.25); // bunyi rendah panjang: gagal
+      if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+    }
+  } catch (e) { /* suara hanya pelengkap - jangan sampai mengganggu proses scan */ }
+}
+
+// Kamera membaca QR yang sama berkali-kali selama masih di depan kamera. Kode yang sama diabaikan
+// (tanpa request & tanpa notifikasi) selama masih terlihat, dan sampai SCAN_COOLDOWN_MS setelah
+// terakhir terlihat - supaya setelah scan berhasil tidak langsung muncul "tiket sudah di-scan".
+const SCAN_COOLDOWN_MS = 4000;
+let lastCameraCode = null;
+let lastCameraSeenAt = 0;
+let scanBusy = false;
+
+async function handleCameraScan(decodedText) {
+  const code = String(decodedText || '').trim().toUpperCase();
+  if (!code) return;
+  const now = Date.now();
+  const sameAsLast = code === lastCameraCode && (now - lastCameraSeenAt) < SCAN_COOLDOWN_MS;
+  lastCameraCode = code;
+  lastCameraSeenAt = now; // diperbarui tiap QR terlihat, jadi jeda dihitung sejak QR terakhir terlihat
+  if (sameAsLast || scanBusy) return;
+
+  scanBusy = true;
+  try {
+    await handleCheckIn(code);
+  } finally {
+    scanBusy = false;
+    lastCameraSeenAt = Date.now();
+  }
+}
+
 async function handleCheckIn(kodeTiket) {
   const result = await apiPost('/api/admin/check-in', { kode_tiket: kodeTiket });
   const el = document.getElementById('scanResult');
@@ -641,10 +688,12 @@ async function handleCheckIn(kodeTiket) {
   if (result.success) {
     el.className = 'scan-result show alert-success';
     el.textContent = `✅ ${result.message} — ${result.booking.nama}`;
+    playScanSound(true);
     loadSummary(); loadBookings();
   } else {
     el.className = 'scan-result show alert-error';
     el.textContent = `❌ ${result.message}`;
+    playScanSound(false);
   }
   document.getElementById('manualCode').value = '';
 }

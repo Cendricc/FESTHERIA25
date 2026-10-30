@@ -33,10 +33,20 @@
           <div class="error-msg">Masukkan nomor telepon yang valid.</div>
         </div>
 
-        <div class="field" id="f-asal_instansi">
-          <label>Asal Instansi <span class="req">*</span></label>
-          <input type="text" name="asal_instansi" placeholder="Contoh: SMA Negeri 1 Malang / PT Sehat Sejahtera" required>
-          <div class="error-msg">Asal instansi wajib diisi.</div>
+        <div class="field" id="f-prodi">
+          <label>Prodi <span class="req">*</span></label>
+          <select name="prodi" required>
+            <option value="">Memuat daftar prodi...</option>
+          </select>
+          <div class="error-msg">Prodi wajib dipilih.</div>
+        </div>
+
+        <div class="field" id="f-tingkat">
+          <label>Tingkat <span class="req">*</span></label>
+          <select name="tingkat" required>
+            <option value="">Pilih tingkat</option>
+          </select>
+          <div class="error-msg">Tingkat wajib dipilih.</div>
         </div>
 
         <div class="field" id="f-jumlah_tiket">
@@ -44,14 +54,6 @@
           <input type="number" name="jumlah_tiket" min="1" max="10" value="1" required>
           <div class="error-msg">Jumlah tiket harus antara 1 - 10.</div>
         </div>
-
-        <div class="field" id="f-bukti_ktm">
-          <label>Upload Foto KTM / Kartu Identitas <span class="req">*</span></label>
-          <input type="file" name="bukti_ktm" accept="image/jpeg,image/png,image/webp" required>
-          <div class="error-msg">Foto KTM wajib diunggah (JPG/PNG/WEBP, maks 5MB).</div>
-        </div>
-
-        <div id="ktmPreviewArea"></div>
 
         <button type="submit" class="btn btn-primary" id="btnLanjut">
           <span id="btnLanjutText">Lanjut ke Pembayaran</span>

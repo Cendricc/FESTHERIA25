@@ -162,19 +162,6 @@ router.get('/proof/:orderId', (req, res) => {
   res.sendFile(filePath);
 });
 
-// GET /api/admin/ktm/:orderId - lihat foto KTM/kartu identitas peserta eksternal (hanya admin yang login)
-router.get('/ktm/:orderId', (req, res) => {
-  const booking = db.prepare('SELECT bukti_ktm FROM bookings WHERE id = ?').get(req.params.orderId);
-  if (!booking || !booking.bukti_ktm) {
-    return res.status(404).json({ success: false, message: 'Foto KTM tidak ditemukan.' });
-  }
-  const filePath = path.join(UPLOAD_DIR, booking.bukti_ktm);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ success: false, message: 'File KTM tidak ditemukan di server.' });
-  }
-  res.sendFile(filePath);
-});
-
 // POST /api/admin/approve-payment - admin meng-ACC bukti pembayaran, status jadi "paid" + tiket dibuat
 router.post('/approve-payment', (req, res) => {
   try {

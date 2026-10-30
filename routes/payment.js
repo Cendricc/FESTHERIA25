@@ -1,16 +1,65 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const db = require('../db/database');
 const { generateQRCodeDataUrl, getTicketsForBooking } = require('../services/qrService');
 const { UPLOAD_DIR } = require('../services/storagePaths');
-const { createImageUpload, fileSignatureValid } = require('../services/imageUpload');
 
-const uploadBukti = createImageUpload('bukti');
+// Ekstensi file DITENTUKAN SENDIRI oleh server berdasarkan MIME type, bukan diambil dari nama
+// file asli yang diupload pengguna - supaya tidak bisa dipakai untuk path traversal
+// (mis. nama file jahat berisi "../../../sesuatu").
+const EXT_BY_MIME = { 'image/jpeg': '.jpg', 'image/jpg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
 
+// Signature byte pertama tiap format gambar, dipakai untuk memverifikasi file BENAR-BENAR
+// gambar (bukan cuma mengaku lewat header Content-Type yang gampang dipalsukan client).
+const MAGIC_BYTES = {
+  'image/jpeg': [0xff, 0xd8, 0xff],
+  'image/jpg': [0xff, 0xd8, 0xff],
+  'image/png': [0x89, 0x50, 0x4e, 0x47],
+  'image/webp': null // dicek khusus (RIFF....WEBP) di bawah
+};
+
+function fileSignatureValid(filePath, mimetype) {
+  const buffer = Buffer.alloc(12);
+  const fd = fs.openSync(filePath, 'r');
+  fs.readSync(fd, buffer, 0, 12, 0);
+  fs.closeSync(fd);
+
+  if (mimetype === 'image/webp') {
+    return buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP';
+  }
+  const sig = MAGIC_BYTES[mimetype];
+  if (!sig) return false;
+  return sig.every((byte, i) => buffer[i] === byte);
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const orderId = (req.body.order_id || 'unknown').replace(/[^a-zA-Z0-9-]/g, '').slice(0, 40);
+    const ext = EXT_BY_MIME[file.mimetype] || '.jpg';
+    cb(null, `${orderId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // maksimal 5MB
+  fileFilter: (req, file, cb) => {
+    if (!EXT_BY_MIME[file.mimetype]) {
+      return cb(new Error('Format file harus JPG, PNG, atau WEBP.'));
+    }
+    cb(null, true);
+  }
+});
+
+// POST /api/payment/submit-proof - pembeli mengunggah bukti transfer/QRIS.
+// Tidak ada lagi batas waktu - pesanan tetap bisa menerima bukti kapan saja selama
+// belum lunas dan belum ditandai gagal oleh admin.
 router.post('/submit-proof', (req, res) => {
-  uploadBukti.single('bukti_pembayaran')(req, res, async (err) => {
+  upload.single('bukti_pembayaran')(req, res, async (err) => {
     if (err) {
       return res.status(400).json({ success: false, message: err.message || 'Gagal mengunggah file.' });
     }
@@ -20,6 +69,7 @@ router.post('/submit-proof', (req, res) => {
 
     const cleanupUploadedFile = () => fs.unlink(req.file.path, () => {});
 
+    // Verifikasi isi file benar-benar gambar (bukan cuma header Content-Type yang dipalsukan)
     if (!fileSignatureValid(req.file.path, req.file.mimetype)) {
       cleanupUploadedFile();
       return res.status(400).json({ success: false, message: 'File tidak dikenali sebagai gambar yang valid.' });
@@ -41,6 +91,7 @@ router.post('/submit-proof', (req, res) => {
       return res.status(400).json({ success: false, message: 'Pemesanan ini sudah ditandai gagal oleh panitia. Silakan buat pesanan baru.' });
     }
 
+    // Hapus file bukti lama kalau sebelumnya sudah pernah upload (mengganti bukti)
     if (booking.bukti_pembayaran) {
       fs.unlink(path.join(UPLOAD_DIR, booking.bukti_pembayaran), () => {});
     }
@@ -54,6 +105,8 @@ router.post('/submit-proof', (req, res) => {
   });
 });
 
+// POST /api/payment/lookup - pembeli cek status/ambil tiket dengan input Email + Order ID.
+// Ini "gerbang" utama supaya orang tidak bisa lihat data/tiket orang lain hanya dengan menebak Order ID.
 // Pembatas percobaan GAGAL per email (di memori): mencegah orang menebak No HP / Booking ID
 // untuk satu email. Percobaan benar tidak dihitung. 10 gagal / 15 menit per email.
 const failedLookups = new Map(); // email -> { count, resetAt }
@@ -124,6 +177,8 @@ router.post('/lookup', (req, res) => {
   return res.json({ success: true, status: 'pending', order_id: booking.id, ada_bukti: !!booking.bukti_pembayaran });
 });
 
+// GET /api/payment/ticket/:orderId?email=... - ambil data tiket + QR (satu per lembar) setelah lunas.
+// Wajib menyertakan email pemesan yang cocok - order ID saja tidak cukup untuk melihat tiket orang lain.
 router.get('/ticket/:orderId', async (req, res) => {
   const email = (req.query.email || '').trim().toLowerCase();
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(req.params.orderId);
